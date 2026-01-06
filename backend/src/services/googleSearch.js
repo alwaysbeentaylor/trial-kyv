@@ -16,6 +16,12 @@ class GoogleSearchService {
         this.apiKey = process.env.TWO_CAPTCHA_API_KEY;
         this.proxyUrl = process.env.PROXY_URL;
         this.proxyAgent = this.proxyUrl ? new HttpsProxyAgent(this.proxyUrl) : null;
+        
+        // Log configuration on startup
+        console.log('🔧 GoogleSearchService initialized:');
+        console.log(`   📦 2Captcha API Key: ${this.apiKey ? '✅ Set (' + this.apiKey.substring(0, 8) + '...)' : '❌ NOT SET!'}`);
+        console.log(`   🌐 Proxy URL: ${this.proxyUrl ? '✅ Set' : '❌ NOT SET (using proxy pool)'}`);
+        console.log(`   ⏱️ Search delay: ${this.minDelay}ms`);
         this.cookies = new Map();
         this.userAgents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -527,16 +533,48 @@ class GoogleSearchService {
                 await page.waitForSelector('#search, #rso, #topstuff, .g', { timeout: 10000 });
             } catch (e) {
                 console.log('⚠️ Search results container not found, checking page content...');
-                const pageContent = await page.content();
-                const hasCaptcha = pageContent.includes('captcha') || pageContent.includes('unusual traffic');
-                const hasResults = pageContent.includes('g-link') || pageContent.includes('result');
                 
-                if (hasCaptcha) {
-                    console.log('⚠️ CAPTCHA detected in page content but not caught by detector!');
-                }
-                if (!hasResults) {
-                    console.log('⚠️ No search results found in page content');
-                    console.log(`   Page title: ${await page.title()}`);
+                // Re-check for captcha - might have been missed
+                const lateCaptcha = await this.detectCaptcha(page);
+                if (lateCaptcha) {
+                    console.log('🔒 CAPTCHA detected late! Attempting to solve...');
+                    if (this.apiKey) {
+                        const solved = await this.solveCaptcha(page, searchUrl);
+                        if (solved) {
+                            console.log('✅ Late CAPTCHA solved! Reloading...');
+                            await this.delay(2000);
+                            await loadSearchPage();
+                            // Try waiting for results again
+                            await page.waitForSelector('#search, #rso', { timeout: 10000 }).catch(() => {});
+                        } else {
+                            console.log('❌ Failed to solve late CAPTCHA');
+                            await page.close();
+                            this.markProxyFailed(this.getCurrentProxy());
+                            await this.closeBrowser();
+                            if (retryCount < MAX_RETRIES - 1) {
+                                return this.search(query, maxResults, retryCount + 1);
+                            }
+                            return [];
+                        }
+                    } else {
+                        console.log('❌ 2Captcha API key not set! Cannot solve CAPTCHA.');
+                        console.log('💡 Set TWO_CAPTCHA_API_KEY in Render environment variables.');
+                        await page.close();
+                        this.markProxyFailed(this.getCurrentProxy());
+                        await this.closeBrowser();
+                        if (retryCount < MAX_RETRIES - 1) {
+                            return this.search(query, maxResults, retryCount + 1);
+                        }
+                        return [];
+                    }
+                } else {
+                    const pageContent = await page.content();
+                    const hasResults = pageContent.includes('g-link') || pageContent.includes('result');
+                    if (!hasResults) {
+                        console.log('⚠️ No search results found in page content');
+                        console.log(`   Page title: ${await page.title()}`);
+                        console.log(`   Page URL: ${page.url()}`);
+                    }
                 }
             }
 
@@ -614,19 +652,66 @@ class GoogleSearchService {
         try {
             // Check for reCAPTCHA iframe
             const captchaFrame = await page.$('iframe[src*="recaptcha"]');
-            if (captchaFrame) return true;
+            if (captchaFrame) {
+                console.log('🔒 CAPTCHA detected: reCAPTCHA iframe found');
+                return true;
+            }
 
-            // Check for "unusual traffic" message
+            // Check for Google CAPTCHA page elements
+            const captchaDiv = await page.$('#captcha-form, .g-recaptcha, #recaptcha, .captcha-container');
+            if (captchaDiv) {
+                console.log('🔒 CAPTCHA detected: captcha form element found');
+                return true;
+            }
+
+            // Check for "unusual traffic" message in page content (case-insensitive)
             const content = await page.content();
-            if (content.includes('unusual traffic') ||
-                content.includes('not a robot') ||
-                content.includes('CAPTCHA') ||
-                content.includes('g-recaptcha')) {
+            const contentLower = content.toLowerCase();
+            
+            const captchaIndicators = [
+                'unusual traffic',
+                'not a robot',
+                'captcha',
+                'g-recaptcha',
+                'recaptcha',
+                'verify you are human',
+                'verify you\'re human',
+                'i\'m not a robot',
+                'automated queries',
+                'sorry...we\'re sorry',
+                'onze systemen hebben ongebruikelijk verkeer',  // Dutch
+                'ongewoon verkeer',  // Dutch
+                'bent geen robot',  // Dutch
+                'unusual traffic from your computer',
+                '/sorry/index',
+                'ipv4.google.com/sorry'
+            ];
+            
+            for (const indicator of captchaIndicators) {
+                if (contentLower.includes(indicator.toLowerCase())) {
+                    console.log(`🔒 CAPTCHA detected: "${indicator}" found in page content`);
+                    return true;
+                }
+            }
+
+            // Check URL for captcha/sorry page
+            const url = page.url();
+            if (url.includes('/sorry') || url.includes('captcha') || url.includes('recaptcha')) {
+                console.log(`🔒 CAPTCHA detected: URL contains captcha indicator (${url})`);
+                return true;
+            }
+
+            // Check page title for blocked/captcha indicators
+            const title = await page.title();
+            const titleLower = title.toLowerCase();
+            if (titleLower.includes('sorry') || titleLower.includes('captcha') || titleLower.includes('blocked')) {
+                console.log(`🔒 CAPTCHA detected: Page title indicates block (${title})`);
                 return true;
             }
 
             return false;
         } catch (error) {
+            console.error('CAPTCHA detection error:', error.message);
             return false;
         }
     }
