@@ -2,7 +2,7 @@ const OpenAI = require('openai');
 const companyScraper = require('./companyScraper');
 const knowledgeGraph = require('./knowledgeGraph');
 const googleSearch = require('./googleSearch');
-const queryGenerator = require('./qhoeveel doet ieueryGenerator');
+const queryGenerator = require('./queryGenerator');
 
 /**
  * Format large numbers to human-readable format (e.g. 18K, 1.2M)
