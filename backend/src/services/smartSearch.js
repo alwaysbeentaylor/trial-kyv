@@ -1905,26 +1905,71 @@ Genereer een GEDETAILLEERD JSON-antwoord:
         }
 
         // ============================================
-        // STEP 2: Search (Brave Search FIRST, Google as fallback)
+        // STEP 2: Search (Google FIRST - better results, Brave as fallback)
         // ============================================
         const allResults = [];
         const seenUrls = new Set();
         let linkedInFound = false;
+        let googleFailed = false;
         
         // Helper function for delay
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         
-        // Check if Brave Search is available (preferred - no CAPTCHA issues)
-        const useBraveSearch = braveSearch.isConfigured();
+        // Try Google Search first (better quality results)
+        console.log('🔍 Step 2: Using Google Search (primary - better results)...');
         
-        if (useBraveSearch) {
-            console.log('🦁 Step 2: Using Brave Search (preferred - no CAPTCHA)...');
+        for (let i = 0; i < uniqueQueries.length; i++) {
+            const query = uniqueQueries[i];
+            try {
+                console.log(`   🔎 Query ${i + 1}/${uniqueQueries.length}: ${query.substring(0, 60)}...`);
+                const results = await googleSearch.search(query, 5);
+                
+                console.log(`   📊 Query returned ${results?.length || 0} results`);
+                
+                if (!results || results.length === 0) {
+                    console.log(`   ⚠️ No results for query: ${query.substring(0, 50)}...`);
+                    if (i === 0) {
+                        googleFailed = true;
+                    }
+                }
+                
+                for (const result of (results || [])) {
+                    if (result.link && !seenUrls.has(result.link)) {
+                        seenUrls.add(result.link);
+                        allResults.push(result);
+                        
+                        if (result.link.includes('linkedin.com/in/')) {
+                            linkedInFound = true;
+                            console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                        }
+                    }
+                }
+                
+                if (linkedInFound && allResults.length >= 2) {
+                    console.log(`   ✅ LinkedIn found with sufficient results - stopping early after ${i + 1} queries`);
+                    break;
+                }
+                
+                if (i < uniqueQueries.length - 1 && !linkedInFound) {
+                    await delay(1500);
+                }
+            } catch (error) {
+                console.error(`   ❌ Query failed: ${query.substring(0, 50)}...`);
+                console.error(`   Error: ${error.message}`);
+                if (i === 0) {
+                    googleFailed = true;
+                }
+            }
+        }
+        
+        // Fallback to Brave if Google failed and Brave is configured
+        if (googleFailed && allResults.length === 0 && braveSearch.isConfigured()) {
+            console.log('🦁 Google failed, falling back to Brave Search...');
             
-            // Use Brave Search - much more reliable than Google scraping
-            for (let i = 0; i < Math.min(uniqueQueries.length, 3); i++) { // Limit to 3 queries to save API quota
+            for (let i = 0; i < Math.min(uniqueQueries.length, 3); i++) {
                 const query = uniqueQueries[i];
                 try {
-                    console.log(`   🔎 Query ${i + 1}: ${query.substring(0, 60)}...`);
+                    console.log(`   🔎 Brave Query ${i + 1}: ${query.substring(0, 60)}...`);
                     const results = await braveSearch.search(query, 10);
                     
                     console.log(`   📊 Query returned ${results?.length || 0} results`);
@@ -1947,52 +1992,6 @@ Genereer een GEDETAILLEERD JSON-antwoord:
                     }
                 } catch (error) {
                     console.error(`   ❌ Brave query failed: ${error.message}`);
-                }
-            }
-        } else {
-            console.log('🔍 Step 2: Using Google Search (Brave API not configured)...');
-            console.log('   💡 TIP: Set BRAVE_SEARCH_API_KEY for more reliable searches (no CAPTCHA)');
-            
-            // Fallback to Google Search
-            for (let i = 0; i < uniqueQueries.length; i++) {
-                const query = uniqueQueries[i];
-                try {
-                    console.log(`   🔎 Query ${i + 1}/${uniqueQueries.length}: ${query.substring(0, 60)}...`);
-                    const results = await googleSearch.search(query, 5);
-                    
-                    console.log(`   📊 Query returned ${results?.length || 0} results`);
-                    
-                    if (!results || results.length === 0) {
-                        console.log(`   ⚠️ No results for query: ${query.substring(0, 50)}...`);
-                        if (i === 0 && !process.env.TWO_CAPTCHA_API_KEY) {
-                            console.error('   ❌ CRITICAL: TWO_CAPTCHA_API_KEY not set! Google Search will fail.');
-                            console.error('   💡 Please set TWO_CAPTCHA_API_KEY or use BRAVE_SEARCH_API_KEY instead.');
-                        }
-                    }
-                    
-                    for (const result of (results || [])) {
-                        if (result.link && !seenUrls.has(result.link)) {
-                            seenUrls.add(result.link);
-                            allResults.push(result);
-                            
-                            if (result.link.includes('linkedin.com/in/')) {
-                                linkedInFound = true;
-                                console.log(`   ✅ LinkedIn profile found: ${result.link}`);
-                            }
-                        }
-                    }
-                    
-                    if (linkedInFound && allResults.length >= 2) {
-                        console.log(`   ✅ LinkedIn found with sufficient results - stopping early after ${i + 1} queries`);
-                        break;
-                    }
-                    
-                    if (i < uniqueQueries.length - 1 && !linkedInFound) {
-                        await delay(1500);
-                    }
-                } catch (error) {
-                    console.error(`   ❌ Query failed: ${query.substring(0, 50)}...`);
-                    console.error(`   Error: ${error.message}`);
                 }
             }
         }

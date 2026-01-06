@@ -30,9 +30,8 @@ class GoogleSearchService {
         ];
         this.currentUserAgent = this.userAgents[0];
         
-        // EU Region proxy - rotating IPs from European pool
+        // EU Region proxy - single IP for better reliability
         this.proxyPool = [
-            'https://u1bda9df9575305d3-zone-custom-region-eu:u1bda9df9575305d3@101.32.255.125:2333',
             'https://u1bda9df9575305d3-zone-custom-region-eu:u1bda9df9575305d3@43.157.126.177:2333'
         ];
         this.currentProxyIndex = 0;
