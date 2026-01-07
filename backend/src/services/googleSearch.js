@@ -477,16 +477,31 @@ class GoogleSearchService {
             console.log(`🔍 Google Search: ${query}${retryCount > 0 ? ` (retry ${retryCount}/${MAX_RETRIES})` : ''}`);
             await loadSearchPage();
 
+            // Wait a bit for page to fully load before checking CAPTCHA
+            await this.delay(1000);
+            
             let captchaDetected = await this.detectCaptcha(page);
             if (captchaDetected) {
                 console.log(`🔒 Google reCAPTCHA detected! (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+                
+                // Log page info for debugging
+                try {
+                    const pageTitle = await page.title();
+                    const pageUrl = page.url();
+                    console.log(`   📄 Page title: ${pageTitle}`);
+                    console.log(`   🔗 Page URL: ${pageUrl.substring(0, 80)}...`);
+                } catch (e) {
+                    // Ignore
+                }
+                
                 let solved = false;
                 if (this.apiKey) {
                     solved = await this.solveCaptcha(page, searchUrl);
                     if (solved) {
                         console.log('✅ reCAPTCHA solved! Reloading results...');
-                        await this.delay(2000);
+                        await this.delay(3000); // Longer wait for CAPTCHA to process
                         await loadSearchPage();
+                        await this.delay(2000); // Wait for page to load
                         captchaDetected = await this.detectCaptcha(page);
                         
                         if (captchaDetected) {
@@ -721,60 +736,190 @@ class GoogleSearchService {
      */
     async solveCaptcha(page, pageUrl) {
         try {
-            // Extract reCAPTCHA sitekey - improved extraction for different CAPTCHA formats
-            const sitekey = await page.evaluate(() => {
-                // Method 1: Try to find sitekey in iframe src
-                const iframes = document.querySelectorAll('iframe[src*="recaptcha"]');
-                for (const iframe of iframes) {
-                    const match = iframe.src.match(/[?&]k=([^&]+)/);
-                    if (match && match[1]) return match[1];
-                }
-
-                // Method 2: Try to find in recaptcha div with data-sitekey
-                const recaptchaDivs = document.querySelectorAll('.g-recaptcha, [data-sitekey], div[class*="recaptcha"]');
-                for (const div of recaptchaDivs) {
-                    const key = div.getAttribute('data-sitekey');
-                    if (key) return key;
-                }
-
-                // Method 3: Search in script tags for sitekey
-                const scripts = document.querySelectorAll('script');
-                for (const script of scripts) {
-                    const content = script.textContent || script.innerHTML;
-                    const match = content.match(/sitekey['"]?\s*[:=]\s*['"]([^'"]+)['"]/i);
-                    if (match && match[1]) return match[1];
-                }
-
-                // Method 4: Search in page HTML for common sitekey patterns
-                const html = document.documentElement.innerHTML;
-                const patterns = [
-                    /data-sitekey=["']([^"']+)["']/i,
-                    /sitekey["']?\s*[:=]\s*["']([^"']+)["']/i,
-                    /recaptcha[^"']*["']([A-Za-z0-9_-]{40})["']/i
-                ];
-                
-                for (const pattern of patterns) {
-                    const match = html.match(pattern);
-                    if (match && match[1] && match[1].length > 20) return match[1];
-                }
-
-                // Method 5: Try to find in grecaptcha object if available
-                if (typeof window !== 'undefined' && window.grecaptcha) {
-                    try {
-                        const widgets = document.querySelectorAll('.g-recaptcha');
-                        for (let i = 0; i < widgets.length; i++) {
-                            const widgetId = window.grecaptcha.render(widgets[i], {});
-                            // This might not work but worth trying
+            console.log('🔍 Attempting to extract reCAPTCHA sitekey...');
+            
+            // Set up network listener to catch sitekey from requests
+            let sitekeyFromNetwork = null;
+            const networkListener = async (response) => {
+                try {
+                    const url = response.url();
+                    if (url.includes('recaptcha') && url.includes('k=')) {
+                        const match = url.match(/[?&]k=([^&]+)/);
+                        if (match && match[1] && match[1].length > 20) {
+                            sitekeyFromNetwork = match[1];
+                            console.log(`🔑 Found sitekey in network request: ${sitekeyFromNetwork.substring(0, 20)}...`);
                         }
-                    } catch (e) {}
+                    }
+                } catch (e) {
+                    // Ignore
                 }
+            };
+            page.on('response', networkListener);
+            
+            // Wait for CAPTCHA to fully load - critical for production
+            try {
+                // Wait for any recaptcha iframe or element to appear
+                await page.waitForSelector('iframe[src*="recaptcha"], .g-recaptcha, [data-sitekey]', { 
+                    timeout: 5000 
+                }).catch(() => {
+                    console.log('⚠️ CAPTCHA elements not found with waitForSelector, trying anyway...');
+                });
+                
+                // Additional wait for dynamic content - longer in production
+                await this.delay(process.env.RENDER === 'true' ? 4000 : 2000);
+            } catch (e) {
+                console.log('⚠️ Wait for CAPTCHA elements timed out, continuing...');
+            }
 
-                return null;
-            });
+            // Use sitekey from network if found
+            if (sitekeyFromNetwork) {
+                sitekey = sitekeyFromNetwork;
+                console.log(`🔑 Using sitekey from network request`);
+            }
+            
+            // Extract reCAPTCHA sitekey - improved extraction with retries
+            let extractionAttempt = 0;
+            const maxExtractionAttempts = 3;
+            
+            while (!sitekey && extractionAttempt < maxExtractionAttempts) {
+                extractionAttempt++;
+                console.log(`🔍 Sitekey extraction attempt ${extractionAttempt}/${maxExtractionAttempts}...`);
+                
+                sitekey = await page.evaluate(() => {
+                    const debug = {
+                        iframes: [],
+                        divs: [],
+                        scripts: [],
+                        found: null
+                    };
+                    
+                    // Method 1: Try to find sitekey in iframe src (most reliable)
+                    const iframes = document.querySelectorAll('iframe');
+                    for (const iframe of iframes) {
+                        const src = iframe.src || '';
+                        debug.iframes.push(src.substring(0, 100));
+                        if (src.includes('recaptcha')) {
+                            // Try multiple patterns
+                            const patterns = [
+                                /[?&]k=([^&]+)/,
+                                /sitekey=([^&]+)/,
+                                /\/recaptcha\/api2\/anchor\?k=([^&]+)/
+                            ];
+                            for (const pattern of patterns) {
+                                const match = src.match(pattern);
+                                if (match && match[1] && match[1].length > 20) {
+                                    debug.found = `iframe: ${match[1]}`;
+                                    return match[1];
+                                }
+                            }
+                        }
+                    }
 
+                    // Method 2: Try to find in recaptcha div with data-sitekey
+                    const recaptchaDivs = document.querySelectorAll('.g-recaptcha, [data-sitekey], div[class*="recaptcha"], div[id*="recaptcha"]');
+                    for (const div of recaptchaDivs) {
+                        const key = div.getAttribute('data-sitekey') || div.getAttribute('data-site-key');
+                        if (key && key.length > 20) {
+                            debug.found = `div: ${key}`;
+                            return key;
+                        }
+                        debug.divs.push(div.className || div.id);
+                    }
+
+                    // Method 3: Search in script tags for sitekey
+                    const scripts = document.querySelectorAll('script');
+                    for (const script of scripts) {
+                        const content = script.textContent || script.innerHTML || '';
+                        debug.scripts.push(content.substring(0, 50));
+                        const patterns = [
+                            /sitekey['"]?\s*[:=]\s*['"]([^'"]+)['"]/i,
+                            /['"]sitekey['"]\s*:\s*['"]([^'"]+)['"]/i,
+                            /recaptcha.*?sitekey.*?['"]([A-Za-z0-9_-]{40})['"]/i
+                        ];
+                        for (const pattern of patterns) {
+                            const match = content.match(pattern);
+                            if (match && match[1] && match[1].length > 20) {
+                                debug.found = `script: ${match[1]}`;
+                                return match[1];
+                            }
+                        }
+                    }
+
+                    // Method 4: Search in page HTML for common sitekey patterns
+                    const html = document.documentElement.innerHTML;
+                    const patterns = [
+                        /data-sitekey=["']([^"']+)["']/i,
+                        /sitekey["']?\s*[:=]\s*["']([^"']+)["']/i,
+                        /recaptcha[^"']*["']([A-Za-z0-9_-]{40})["']/i,
+                        /\/recaptcha\/api2\/anchor\?k=([A-Za-z0-9_-]+)/i
+                    ];
+                    
+                    for (const pattern of patterns) {
+                        const match = html.match(pattern);
+                        if (match && match[1] && match[1].length > 20) {
+                            debug.found = `html: ${match[1]}`;
+                            return match[1];
+                        }
+                    }
+
+                    // Method 5: Try to find in grecaptcha object if available
+                    if (typeof window !== 'undefined' && window.grecaptcha) {
+                        try {
+                            const widgets = document.querySelectorAll('.g-recaptcha');
+                            for (let i = 0; i < widgets.length; i++) {
+                                try {
+                                    const widgetId = window.grecaptcha.render(widgets[i], {});
+                                    const response = window.grecaptcha.getResponse(widgetId);
+                                    if (response) {
+                                        // Can't get sitekey from response, but widget exists
+                                    }
+                                } catch (e) {}
+                            }
+                        } catch (e) {}
+                    }
+
+                    // Log debug info for troubleshooting
+                    console.log('CAPTCHA Debug:', JSON.stringify(debug));
+                    return null;
+                });
+
+                if (!sitekey && extractionAttempt < maxExtractionAttempts) {
+                    console.log(`⚠️ Sitekey not found, waiting 2s before retry...`);
+                    await this.delay(2000);
+                }
+            }
+
+            // Remove network listener
+            page.removeListener('response', networkListener);
+            
             if (!sitekey) {
-                console.log('⚠️ Could not extract reCAPTCHA sitekey');
+                console.log('⚠️ Could not extract reCAPTCHA sitekey from page');
+                
+                // Debug: Log page content to help troubleshoot
+                try {
+                    const pageContent = await page.content();
+                    const hasRecaptcha = pageContent.includes('recaptcha') || pageContent.includes('g-recaptcha');
+                    const hasIframe = pageContent.includes('<iframe');
+                    console.log(`   📊 Debug: Page has 'recaptcha': ${hasRecaptcha}, has iframes: ${hasIframe}`);
+                    
+                    // Try to get all iframe sources
+                    const iframeSources = await page.evaluate(() => {
+                        const iframes = Array.from(document.querySelectorAll('iframe'));
+                        return iframes.map(iframe => iframe.src).filter(src => src);
+                    });
+                    if (iframeSources.length > 0) {
+                        console.log(`   📋 Found ${iframeSources.length} iframe(s):`);
+                        iframeSources.forEach((src, i) => {
+                            console.log(`      ${i + 1}. ${src.substring(0, 100)}...`);
+                        });
+                    }
+                } catch (e) {
+                    console.log(`   ⚠️ Could not get debug info: ${e.message}`);
+                }
+                
                 return false;
+            } else {
+                console.log(`🔑 Extracted sitekey: ${sitekey.substring(0, 20)}...`);
             }
 
             console.log(`🔑 Extracted sitekey: ${sitekey.substring(0, 20)}...`);
