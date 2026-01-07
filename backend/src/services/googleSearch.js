@@ -185,13 +185,26 @@ class GoogleSearchService {
                                  process.env.RENDER === 'true' ||
                                  process.env.RENDER_SERVICE_ID; // Render sets this automatically
 
+            // Timeout configuration: longer for production/serverless
+            const browserLaunchTimeout = isServerless ? 60000 : 30000;
+
             if (isServerless) {
                 console.log('🌐 Using @sparticuz/chromium for serverless environment');
                 this.browser = await puppeteer.launch({
                     args: chromium.args.concat(args),
                     defaultViewport: chromium.defaultViewport,
                     executablePath: await chromium.executablePath(),
-                    headless: chromium.headless
+                    headless: chromium.headless,
+                    timeout: browserLaunchTimeout
+                });
+                
+                // Set default timeouts for all pages created from this browser in production
+                this.browser.on('targetcreated', async (target) => {
+                    const page = await target.page();
+                    if (page) {
+                        page.setDefaultNavigationTimeout(60000);
+                        page.setDefaultTimeout(60000);
+                    }
                 });
             } else {
                 // Local environment - use regular puppeteer (not puppeteer-core)
@@ -199,7 +212,8 @@ class GoogleSearchService {
                     const puppeteerRegular = require('puppeteer');
                     this.browser = await puppeteerRegular.launch({
                         headless: 'new',
-                        args
+                        args,
+                        timeout: browserLaunchTimeout
                     });
                 } catch (error) {
                     // Fallback to chromium if regular puppeteer fails
@@ -208,7 +222,8 @@ class GoogleSearchService {
                         args: chromium.args.concat(args),
                         defaultViewport: chromium.defaultViewport,
                         executablePath: await chromium.executablePath(),
-                        headless: chromium.headless
+                        headless: chromium.headless,
+                        timeout: browserLaunchTimeout
                     });
                 }
             }
@@ -354,7 +369,9 @@ class GoogleSearchService {
             }
 
             // Wait for results
-            await page.waitForSelector('#search, #rso', { timeout: 10000 }).catch(() => {});
+            const isProductionPagination = process.env.RENDER === 'true' || process.env.VERCEL || process.env.RENDER_SERVICE_ID;
+            const paginationSelectorTimeout = isProductionPagination ? 20000 : 10000;
+            await page.waitForSelector('#search, #rso', { timeout: paginationSelectorTimeout }).catch(() => {});
 
             // Extract results
             const results = await page.evaluate((num) => {
@@ -401,6 +418,21 @@ class GoogleSearchService {
         try {
             const browser = await this.getBrowser(true);
             const page = await browser.newPage();
+
+            // Set page-level default timeouts (production needs longer timeouts)
+            const isProduction = process.env.RENDER === 'true' || 
+                                process.env.VERCEL || 
+                                process.env.RENDER_SERVICE_ID;
+            const NAVIGATION_TIMEOUT = isProduction ? 60000 : 30000;
+            const DEFAULT_TIMEOUT = isProduction ? 60000 : 30000;
+            const SELECTOR_TIMEOUT = isProduction ? 20000 : 10000;
+            
+            page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
+            page.setDefaultTimeout(DEFAULT_TIMEOUT);
+            
+            if (isProduction) {
+                console.log(`⏱️ Production mode: Using ${NAVIGATION_TIMEOUT/1000}s timeouts`);
+            }
 
             // Authenticate proxy before any navigation
             if (this.currentProxyAuth) {
@@ -466,12 +498,22 @@ class GoogleSearchService {
                 // No-op: cookies disabled for stability
             };
 
-            const loadSearchPage = async () => {
-                await page.goto(searchUrl, {
-                    waitUntil: 'domcontentloaded',
-                    timeout: 30000  // Reduced timeout - fail faster
-                });
-                await handleConsent();
+            const loadSearchPage = async (retryCount = 0) => {
+                try {
+                    await page.goto(searchUrl, {
+                        waitUntil: 'domcontentloaded',
+                        timeout: NAVIGATION_TIMEOUT
+                    });
+                    await handleConsent();
+                } catch (error) {
+                    // Retry once for timeout errors (proxy connection might be slow)
+                    if (error.name === 'TimeoutError' && retryCount === 0) {
+                        console.log('⚠️ Navigation timeout, retrying after 2s...');
+                        await this.delay(2000);
+                        return loadSearchPage(1);
+                    }
+                    throw error;
+                }
             };
 
             console.log(`🔍 Google Search: ${query}${retryCount > 0 ? ` (retry ${retryCount}/${MAX_RETRIES})` : ''}`);
@@ -545,7 +587,7 @@ class GoogleSearchService {
 
             // Wait for search results or check for errors
             try {
-                await page.waitForSelector('#search, #rso, #topstuff, .g', { timeout: 10000 });
+                await page.waitForSelector('#search, #rso, #topstuff, .g', { timeout: SELECTOR_TIMEOUT });
             } catch (e) {
                 console.log('⚠️ Search results container not found, checking page content...');
                 
@@ -560,7 +602,7 @@ class GoogleSearchService {
                             await this.delay(2000);
                             await loadSearchPage();
                             // Try waiting for results again
-                            await page.waitForSelector('#search, #rso', { timeout: 10000 }).catch(() => {});
+                            await page.waitForSelector('#search, #rso', { timeout: SELECTOR_TIMEOUT }).catch(() => {});
                         } else {
                             console.log('❌ Failed to solve late CAPTCHA');
                             await page.close();
@@ -759,8 +801,10 @@ class GoogleSearchService {
             // Wait for CAPTCHA to fully load - critical for production
             try {
                 // Wait for any recaptcha iframe or element to appear
+                const isProduction = process.env.RENDER === 'true' || process.env.VERCEL || process.env.RENDER_SERVICE_ID;
+                const captchaWaitTimeout = isProduction ? 10000 : 5000;
                 await page.waitForSelector('iframe[src*="recaptcha"], .g-recaptcha, [data-sitekey]', { 
-                    timeout: 5000 
+                    timeout: captchaWaitTimeout 
                 }).catch(() => {
                     console.log('⚠️ CAPTCHA elements not found with waitForSelector, trying anyway...');
                 });
