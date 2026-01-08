@@ -2356,6 +2356,35 @@ Return JSON:
         const hasCompanyFromEmail = Boolean(emailDomainInfo?.companyName);
         const shouldSearchSocials = this.shouldSearchSocialMedia(celebrityInfo, linkedinInfo, { hasCompanyFromEmail });
 
+        // TRY TO REUSE PROBE DATA FIRST (no new searches if found)
+        if (allResults.length > 0) {
+            const profiles = this.extractPlatformProfiles(allResults);
+
+            if (profiles.instagram.length > 0) {
+                const bestInsta = profiles.instagram[0];
+                instagramResult = {
+                    url: bestInsta.link,
+                    handle: bestInsta.link.split('instagram.com/')[1]?.split('/')[0],
+                    followers: null, // Will be guessed by AI later or left null needed
+                    profilePhoto: null,
+                    source: 'probe_reuse'
+                };
+                console.log(`♻️ Reusing Instagram from probe: ${instagramResult.url}`);
+            }
+
+            if (profiles.twitter.length > 0) {
+                const bestTwitter = profiles.twitter[0];
+                twitterResult = {
+                    url: bestTwitter.link,
+                    handle: bestTwitter.link.split('twitter.com/')[1]?.split('/')[0] || bestTwitter.link.split('x.com/')[1]?.split('/')[0],
+                    followers: null,
+                    profilePhoto: null,
+                    source: 'probe_reuse'
+                };
+                console.log(`♻️ Reusing Twitter from probe: ${twitterResult.url}`);
+            }
+        }
+
         if (shouldSearchSocials) {
             console.log(`🔍 Searching social media presence (parallel)...`);
 
@@ -2367,19 +2396,27 @@ Return JSON:
             let instagramIdx = -1;
             let twitterIdx = -1;
 
-            if (priority === 'instagram' || priority === 'both') {
+            if ((priority === 'instagram' || priority === 'both') && !instagramResult.url) {
                 instagramIdx = searchPromises.length;
                 searchPromises.push(this.searchInstagram(guest));
             }
 
-            if (priority === 'twitter' || priority === 'both') {
+            if ((priority === 'twitter' || priority === 'both') && !twitterResult.url) {
                 twitterIdx = searchPromises.length;
                 searchPromises.push(this.searchTwitter(guest));
             }
 
-            // Always search news in parallel too
-            const newsIdx = searchPromises.length;
-            searchPromises.push(this.searchRecentNews(guest));
+            // Always search news in parallel too (unless we already have super strong signals for a celebrity)
+            // If it's a confirmed celebrity and we already found socials in probe, we can skip news to save time
+            const skipNews = celebrityInfo.isCelebrity && (instagramResult.url || twitterResult.url);
+            let newsIdx = -1;
+
+            if (!skipNews) {
+                newsIdx = searchPromises.length;
+                searchPromises.push(this.searchRecentNews(guest));
+            } else {
+                console.log(`⚡ fast-mode: Skipping news search for identified celebrity`);
+            }
 
             // Wait for all searches to complete (or fail)
             const results = await Promise.allSettled(searchPromises);
@@ -2430,12 +2467,17 @@ Return JSON:
         const targetCompany = guest.company || (linkedinInfo.bestMatch && linkedinInfo.bestMatch.company);
 
         if (targetCompany) {
-            console.log(`🏢 Quick company lookup: ${targetCompany}`);
-            // companyScraper already extracts info from snippets via AI
-            companyInfo = await companyScraper.searchCompany(targetCompany, {
-                guestCountry: guest.country,
-                guestCity: guest.city || null
-            });
+            // SKIP company search for confirmed celebrities (AI will deduce "company" like 'RTL' or 'Universal' from context)
+            if (celebrityInfo.isCelebrity) {
+                console.log(`⚡ fast-mode: Skipping dedicated company search for celebrity (AI will infer context)`);
+            } else {
+                console.log(`🏢 Quick company lookup: ${targetCompany}`);
+                // companyScraper already extracts info from snippets via AI
+                companyInfo = await companyScraper.searchCompany(targetCompany, {
+                    guestCountry: guest.country,
+                    guestCity: guest.city || null
+                });
+            }
             // SKIP website scraping - AI already extracted info from snippets
         }
         guest.company_info = companyInfo;
