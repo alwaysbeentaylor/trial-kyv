@@ -12,15 +12,21 @@ class GoogleSearchService {
     constructor() {
         this.browser = null;
         this.lastRequestTime = 0;
-        this.minDelay = parseInt(process.env.GOOGLE_SEARCH_DELAY || '2500'); // 2.5 seconds between searches
+        this.minDelay = parseInt(process.env.GOOGLE_SEARCH_DELAY || '1000'); // 1 second between SERP API calls
         this.apiKey = process.env.TWO_CAPTCHA_API_KEY;
         this.proxyUrl = process.env.PROXY_URL;
         this.proxyAgent = this.proxyUrl ? new HttpsProxyAgent(this.proxyUrl) : null;
 
+        // Bright Data SERP API configuration - handles CAPTCHAs automatically!
+        this.serpApiKey = process.env.BRIGHT_DATA_API_KEY || 'ecb25225-633c-427b-a957-f6698b6381c5';
+        this.serpApiZone = process.env.BRIGHT_DATA_SERP_ZONE || 'serp_api1';
+        this.serpApiEndpoint = 'https://api.brightdata.com/request';
+        this.useSerpApi = true; // Use SERP API by default (no CAPTCHAs!)
+
         // Log configuration on startup
         console.log('🔧 GoogleSearchService initialized:');
-        console.log(`   📦 2Captcha API Key: ${this.apiKey ? '✅ Set (' + this.apiKey.substring(0, 8) + '...)' : '❌ NOT SET!'}`);
-        console.log(`   🌐 Proxy URL: ${this.proxyUrl ? '✅ Set' : '❌ NOT SET (using 2Captcha residential proxies)'}`);
+        console.log(`   🔍 Bright Data SERP API: ${this.serpApiKey ? '✅ Enabled (zone: ' + this.serpApiZone + ')' : '❌ NOT SET'}`);
+        console.log(`   📦 2Captcha API Key: ${this.apiKey ? '✅ Set' : '❌ NOT SET'}`);
         console.log(`   ⏱️ Search delay: ${this.minDelay}ms`);
         this.cookies = new Map();
         this.userAgents = [
@@ -30,8 +36,7 @@ class GoogleSearchService {
         ];
         this.currentUserAgent = this.userAgents[0];
 
-        // Bright Data RESIDENTIAL proxy - real home IPs that Google won't block
-        // Format: http://username:password@host:port
+        // Fallback proxy pool (only used if SERP API fails)
         this.proxyPool = [
             'http://brd-customer-hl_18ddad31-zone-residential_proxy1:c9h2heunpf8n@brd.superproxy.io:33335'
         ];
@@ -39,6 +44,106 @@ class GoogleSearchService {
         this.failedProxies = new Set();
         this.rotateProxyOnNextLaunch = false;
         this.currentProxyInfo = null;
+    }
+
+    /**
+     * Search using Bright Data SERP API - NO CAPTCHAs!
+     * This is the preferred method as it handles all anti-bot measures automatically
+     */
+    async searchWithSerpApi(query, maxResults = 10) {
+        if (!this.serpApiKey) {
+            console.log('⚠️ SERP API key not set, falling back to Puppeteer');
+            return null;
+        }
+
+        try {
+            console.log(`🔍 SERP API: Searching "${query.substring(0, 50)}..."`);
+
+            // Build Google search URL with parameters
+            const searchUrl = `https://www.google.nl/search?q=${encodeURIComponent(query)}&hl=nl&num=${maxResults}`;
+
+            const response = await fetch(this.serpApiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.serpApiKey}`
+                },
+                body: JSON.stringify({
+                    zone: this.serpApiZone,
+                    url: searchUrl,
+                    format: 'raw'
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`❌ SERP API error: ${response.status} - ${errorText}`);
+                return null;
+            }
+
+            const html = await response.text();
+            console.log(`✅ SERP API: Got response (${html.length} chars)`);
+
+            // Parse the HTML response to extract search results
+            const results = this.parseGoogleHtml(html, maxResults);
+            console.log(`📊 SERP API: Parsed ${results.length} results`);
+
+            return results;
+
+        } catch (error) {
+            console.error(`❌ SERP API error: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Parse Google HTML response to extract search results
+     */
+    parseGoogleHtml(html, maxResults = 10) {
+        const results = [];
+
+        // Simple regex-based parsing for Google search results
+        // Look for result blocks with links and titles
+        const resultPattern = /<a href="(https?:\/\/[^"]+)"[^>]*><h3[^>]*>([^<]+)<\/h3>/gi;
+        const snippetPattern = /<div[^>]*class="[^"]*VwiC3b[^"]*"[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/div>/gi;
+
+        let match;
+        while ((match = resultPattern.exec(html)) !== null && results.length < maxResults) {
+            const link = match[1];
+            const title = match[2].replace(/<[^>]+>/g, '').trim();
+
+            // Skip Google internal links
+            if (link.includes('google.com/search') || link.includes('google.com/url')) {
+                continue;
+            }
+
+            results.push({
+                link,
+                title,
+                snippet: '' // Will try to extract snippets separately
+            });
+        }
+
+        // If regex parsing fails, try a simpler approach
+        if (results.length === 0) {
+            // Look for any external links with reasonable patterns
+            const linkPattern = /href="(https?:\/\/(?!www\.google\.)[^"]+)"/gi;
+            const seen = new Set();
+
+            while ((match = linkPattern.exec(html)) !== null && results.length < maxResults) {
+                const link = match[1];
+                if (!seen.has(link) && !link.includes('google.') && !link.includes('gstatic.')) {
+                    seen.add(link);
+                    results.push({
+                        link,
+                        title: link.split('/')[2] || 'Result', // Use domain as title fallback
+                        snippet: ''
+                    });
+                }
+            }
+        }
+
+        return results;
     }
 
     /**
@@ -518,11 +623,22 @@ class GoogleSearchService {
     /**
      * Main search method compatible with smartSearch.js
      * Returns array of { link, title, snippet }
+     * Uses Bright Data SERP API first (no CAPTCHAs!), falls back to Puppeteer
      */
     async search(query, maxResults = 10, retryCount = 0) {
         const MAX_RETRIES = 4;
         await this.ensureDelay();
 
+        // === TRY SERP API FIRST (RECOMMENDED - NO CAPTCHAS) ===
+        if (this.useSerpApi && retryCount === 0) {
+            const serpResults = await this.searchWithSerpApi(query, maxResults);
+            if (serpResults && serpResults.length > 0) {
+                return serpResults;
+            }
+            console.log('⚠️ SERP API returned no results, trying Puppeteer fallback...');
+        }
+
+        // === FALLBACK TO PUPPETEER ===
         try {
             const browser = await this.getBrowser(true);
             const page = await browser.newPage();
