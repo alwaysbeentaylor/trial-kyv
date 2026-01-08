@@ -2654,8 +2654,13 @@ Return JSON:
         // Check if we found ANY significant data
         // More lenient check - if we found LinkedIn, company, job title, or any analysis data, we have results
         const hasLinkedIn = linkedinInfo?.bestMatch?.url;
-        const hasCompany = effectiveCompany && effectiveCompany !== 'Unknown';
-        const hasJobTitle = effectiveJobTitle && effectiveJobTitle !== 'Unknown';
+
+        // Exclude placeholder values that mean "no info"
+        const noInfoValues = ['unknown', 'geen informatie gevonden', 'geen informatie', 'niet gevonden', 'onbekend', 'n/a', 'none', '-'];
+        const isRealValue = (val) => val && !noInfoValues.includes(val.toLowerCase().trim());
+
+        const hasCompany = isRealValue(effectiveCompany);
+        const hasJobTitle = isRealValue(effectiveJobTitle);
         const hasAnalysis = analysis?.vip_score > 0;
         const hasTwitter = twitterResult.url;
         const hasInstagram = instagramResult.url;
