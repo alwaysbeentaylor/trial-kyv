@@ -192,7 +192,9 @@ class GoogleSearchService {
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
                 '--disable-blink-features=AutomationControlled',
-                '--disable-web-security'
+                '--disable-web-security',
+                '--ignore-certificate-errors',
+                '--ignore-certificate-errors-spki-list'
             ];
 
             // Use proxy rotation if enabled
