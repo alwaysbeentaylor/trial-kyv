@@ -5,6 +5,28 @@ const googleSearch = require('./googleSearch');
 const queryGenerator = require('./queryGenerator');
 
 /**
+ * Email domains that should NOT be treated as companies/employers
+ * Includes personal email providers and travel/booking platforms
+ */
+const IGNORED_EMAIL_DOMAINS = [
+    // Personal email providers
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.nl', 'yahoo.fr', 'yahoo.de', 'yahoo.co.uk',
+    'hotmail.com', 'hotmail.nl', 'hotmail.fr', 'hotmail.de', 'hotmail.co.uk',
+    'outlook.com', 'live.com', 'live.nl', 'msn.com',
+    'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.nl',
+    'protonmail.com', 'proton.me', 'tutanota.com',
+    'gmx.com', 'gmx.de', 'gmx.nl', 'mail.com', 'zoho.com',
+    'yandex.com', 'yandex.ru', 'mail.ru', 'qq.com', '163.com',
+    // Travel/Booking platforms (guests book through these, don't work there)
+    'expedia.com', 'booking.com', 'hotels.com', 'agoda.com', 'trivago.com',
+    'airbnb.com', 'vrbo.com', 'tripadvisor.com', 'kayak.com', 'priceline.com',
+    'travelocity.com', 'orbitz.com', 'hotwire.com', 'lastminute.com',
+    'momondo.com', 'skyscanner.com', 'cheaptickets.com',
+    // Generic/Test
+    'example.com', 'test.com', 'email.com', 'temp-mail.org'
+];
+
+/**
  * Format large numbers to human-readable format (e.g. 18K, 1.2M)
  */
 function formatNumber(num) {
@@ -116,10 +138,9 @@ class SmartSearchService {
 
         const domain = emailParts[1].toLowerCase();
 
-        // Skip common personal email domains
-        const personalDomains = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'msn.com', 'me.com', 'mail.com', 'protonmail.com'];
-        if (personalDomains.includes(domain)) {
-            console.log(`📧 Skipping personal email domain: ${domain}`);
+        // Skip personal email providers and booking platforms
+        if (IGNORED_EMAIL_DOMAINS.includes(domain)) {
+            console.log(`📧 Skipping ignored email domain: ${domain}`);
             return null;
         }
 
@@ -1881,21 +1902,27 @@ Genereer een GEDETAILLEERD JSON-antwoord:
                 `Result ${i}: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}`
             ).join('\n\n');
 
-            const prompt = `Analyze these search results for the person "${guest.full_name}" from "${guest.country || 'Unknown'}".
-Determine if this person is a Public Figure (Celebrity, Artist, Presenter, Athlete, Politician, etc.) or just a regular private citizen.
+            const prompt = `Analyze these search results for "${guest.full_name}" from "${guest.country || 'Unknown'}".
+
+Determine if this person is a WIDELY KNOWN Public Figure.
 
 SEARCH RESULTS:
 ${resultsText}
 
-CRITICAL: 
-- Look for Wikipedia, IMDb, News Articles, Verified Social Media, or descriptions like "Dutch presenter", "Singer", "Actor".
-- If the results clearly point to a famous person, identify them.
-- If the results are mixed (some famous, some regular), prioritize the famous one as the likely target for this premium hotel system.
+CRITICAL RULES - BE CONSERVATIVE:
+- ONLY return isPublicFigure=true for people who are genuinely famous (actors, musicians, top athletes, major politicians, TV presenters with NATIONAL recognition).
+- Business executives, CEOs, entrepreneurs are NOT public figures (even if they have Wikipedia).
+- Local politicians, city council members are NOT public figures.
+- Former sports club directors, football managers are NOT public figures.
+- Authors, academics, scientists are usually NOT public figures (unless household names).
+- If unsure, return isPublicFigure=false.
+- Wikipedia article is NOT sufficient alone - they need to be genuinely famous/recognizable.
+- Strong indicators: IMDb profile, verified social media with 100k+ followers, multiple entertainment news sources.
 
 Return JSON:
 {
-  "isPublicFigure": boolean,
-  "confidence": number (0-1),
+  "isPublicFigure": boolean (true ONLY for genuine celebrities that most people would recognize),
+  "confidence": number (0-1, be conservative - only 0.9+ for truly famous people),
   "category": string (e.g. 'entertainment', 'sports', 'business', 'none'),
   "knownFor": string (short description),
   "reason": string (short explanation)
@@ -1904,7 +1931,7 @@ Return JSON:
             const response = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: 'You are an expert in identifying public figures and notable personalities.' },
+                    { role: 'system', content: 'You are an expert in identifying genuinely famous public figures. Be VERY conservative - only flag true celebrities that most people would recognize.' },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0,
@@ -1913,7 +1940,8 @@ Return JSON:
 
             const result = JSON.parse(response.choices[0].message.content);
 
-            if (result.isPublicFigure && result.confidence >= 0.7) {
+            // Increased threshold from 0.7 to 0.85 to be more conservative
+            if (result.isPublicFigure && result.confidence >= 0.85) {
                 console.log(`🌟 AI detected Public Figure: ${guest.full_name} (${result.knownFor}) - Conf: ${result.confidence}`);
                 return {
                     isCelebrity: true,
@@ -1996,7 +2024,8 @@ Return JSON:
 
             // AI Celebrity Detection on early results
             const aiDetection = await this.detectCelebrityWithAI(guest, allResults);
-            if (aiDetection && aiDetection.isCelebrity && aiDetection.confidence >= 0.8) {
+            // Require 0.9+ confidence to skip LinkedIn search (very conservative)
+            if (aiDetection && aiDetection.isCelebrity && aiDetection.confidence >= 0.9) {
                 celebrityInfo = aiDetection;
                 console.log(`🌟 Confirmed Public Figure. Skipping deep person-search to avoid namesake mismatches.`);
                 // BRANCH: Skip to Extraction Step
@@ -2366,23 +2395,25 @@ Return JSON:
         if (allResults.length > 0) {
             const profiles = this.extractPlatformProfiles(allResults);
 
-            if (profiles.instagram.length > 0) {
+            // STRICT: Only reuse if URL actually contains instagram.com
+            if (profiles.instagram.length > 0 && profiles.instagram[0].link?.includes('instagram.com')) {
                 const bestInsta = profiles.instagram[0];
                 instagramResult = {
                     url: bestInsta.link,
-                    handle: bestInsta.link.split('instagram.com/')[1]?.split('/')[0],
-                    followers: null, // Will be guessed by AI later or left null needed
+                    handle: bestInsta.link.split('instagram.com/')[1]?.split('/')[0]?.split('?')[0],
+                    followers: null,
                     profilePhoto: null,
                     source: 'probe_reuse'
                 };
                 console.log(`♻️ Reusing Instagram from probe: ${instagramResult.url}`);
             }
 
-            if (profiles.twitter.length > 0) {
+            // STRICT: Only reuse if URL actually contains twitter.com or x.com
+            if (profiles.twitter.length > 0 && (profiles.twitter[0].link?.includes('twitter.com') || profiles.twitter[0].link?.includes('x.com/'))) {
                 const bestTwitter = profiles.twitter[0];
                 twitterResult = {
                     url: bestTwitter.link,
-                    handle: bestTwitter.link.split('twitter.com/')[1]?.split('/')[0] || bestTwitter.link.split('x.com/')[1]?.split('/')[0],
+                    handle: bestTwitter.link.split('twitter.com/')[1]?.split('/')[0]?.split('?')[0] || bestTwitter.link.split('x.com/')[1]?.split('/')[0]?.split('?')[0],
                     followers: null,
                     profilePhoto: null,
                     source: 'probe_reuse'
@@ -2479,12 +2510,21 @@ Return JSON:
             if (celebrityInfo.isCelebrity) {
                 console.log(`⚡ fast-mode: Skipping dedicated company search for celebrity (AI will infer context)`);
             } else {
-                console.log(`🏢 Quick company lookup: ${targetCompany}`);
-                // companyScraper already extracts info from snippets via AI
-                companyInfo = await companyScraper.searchCompany(targetCompany, {
-                    guestCountry: guest.country,
-                    guestCity: guest.city || null
-                });
+                // SKIP company search for invalid/personal domain companies (Hotmail, Gmail, Expedia, etc.)
+                const isInvalidCompany = ['hotmail', 'gmail', 'yahoo', 'outlook', 'live', 'icloud', 'aol', 'protonmail',
+                    'expedia', 'booking', 'hotels', 'agoda', 'trivago', 'airbnb', 'tripadvisor', 'kayak', 'priceline']
+                    .some(p => targetCompany?.toLowerCase().includes(p));
+
+                if (isInvalidCompany) {
+                    console.log(`📋 Skipping company lookup for invalid domain: ${targetCompany}`);
+                } else {
+                    console.log(`🏢 Quick company lookup: ${targetCompany}`);
+                    // companyScraper already extracts info from snippets via AI
+                    companyInfo = await companyScraper.searchCompany(targetCompany, {
+                        guestCountry: guest.country,
+                        guestCity: guest.city || null
+                    });
+                }
             }
             // SKIP website scraping - AI already extracted info from snippets
         }
