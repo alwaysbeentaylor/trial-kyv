@@ -418,17 +418,18 @@ SEARCH RESULTS:
 ${resultsInfo}
 
 INSTRUCTIONS:
-1. **PRIMARY GOAL**: Find the **LinkedIn** profile that belongs to this guest.
-2. **GOLDEN RULE**: If a valid LinkedIn profile is strictly found (same name + region), select it IMMEDIATELY as the best match.
-3. **PRIORITY**: LinkedIn >>>>> Facebook/Instagram/Pinterest. Only select social media if NO LinkedIn is found.
-4. **LOCATION CHECK - CRITICAL**: The result MUST match the guest's country. 
-   - If guest is in "Nederland" (Netherlands), DO NOT match results from "Cairo" (Egypt), "London" (UK), or any other country.
-   - Check the snippet for location indicators: city names, country names, "Locatie:", "Location:", etc.
-   - If a result clearly indicates a different country than the guest's country, return bestIndex: null.
-   - Only match if location matches OR if no location is mentioned (generic/global profiles).
-   - Examples of location indicators: "Amsterdam, Nederland", "Cairo, Egypt", "London, UK", "Locatie: Rotterdam"
-5. **STUDENTS**: If the guest appears to be a Student (on LinkedIn), this IS A VALID MATCH. Do not discard it just because they aren't a CEO.
-6. **IMPOSTORS**: If the result is a namesake (e.g. historical figure, or wrong region), return bestIndex: null.
+1. **PRIMARY GOAL**: Find the most likely identity for this guest.
+2. **PRIORITY**: LinkedIn is the preferred professional source, BUT if the guest is a **Public Figure** (Presenter, Artist, Musician, etc.), their Wikipedia or verified social media may be more relevant than an outdated LinkedIn profile.
+3. **IDENTIFY PUBLIC FIGURES**: 
+   - Look for results like **Wikipedia**, **News Articles**, **IMDb**, or **Verified Social Media** handles.
+   - If you see strong evidence that "Name" is a well-known person (e.g. a famous presenter/singer in the Netherlands), and one LinkedIn result shows a "Student" or "Unknown Person" with the same name, **REJECT the student** as a namesake mismatch.
+   - If multiple "Name" people exist, prioritize the one that matches the guest's likely status (most guests in this system are high-profile).
+4. **GOLDEN RULE**: Only select a LinkedIn profile if you are confident it is the RIGHT "Name". If there's a namesake student and a famous presenter, the famous person is the likely guest.
+5. **LOCATION CHECK - CRITICAL**: The result MUST match the guest's country. 
+   - If guest is in "Nederland" (Netherlands), DO NOT match results from other countries.
+   - Check the snippet for location indicators.
+6. **STUDENTS**: If the guest appears to be a Student (on LinkedIn), match it ONLY if there's no evidence of a more "famous" or "relevant" namesake.
+7. **IMPOSTORS**: Be very careful with namesakes/homonyms.
 
 7. **CRITICAL - INTELLIGENTLY ANALYZE THE SNIPPET**: You are an AI with world knowledge. Use it!
 
@@ -1910,6 +1911,9 @@ Genereer een GEDETAILLEERD JSON-antwoord:
         console.log('🔍 Step 1: Building priority search queries...');
         const priorityQueries = [];
 
+        // Step 1.1: General Broad Search (Essential for Celebrity/Public Figure Detection)
+        priorityQueries.push(`"${guest.full_name}"`);
+
         // LinkedIn queries (always first)
         priorityQueries.push(`site:linkedin.com/in "${guest.full_name}"`);
 
@@ -2083,42 +2087,43 @@ Genereer een GEDETAILLEERD JSON-antwoord:
         // ============================================
         // STEP 5: Find Best LinkedIn Match
         // ============================================
-        if (platforms.linkedin.length > 0) {
-            console.log('💼 Step 5: Analyzing LinkedIn candidates...');
+        // Prepare candidates for AI matching (LinkedIn + Broad/Social/Wikipedia)
+        const aiCandidates = allResults.filter(r => {
+            const link = r.link.toLowerCase();
+            const title = (r.title || '').toLowerCase();
+            const nameParts = guest.full_name.toLowerCase().split(' ');
+            const matchesName = nameParts.some(part => part.length > 3 && title.includes(part));
 
-            // Filter LinkedIn results by country if country is specified
-            let filteredLinkedIn = platforms.linkedin;
-            if (guest.country) {
-                const beforeCount = filteredLinkedIn.length;
-                filteredLinkedIn = this.filterResultsByCountry(filteredLinkedIn, guest.country);
-                const afterCount = filteredLinkedIn.length;
-                if (beforeCount !== afterCount) {
-                    console.log(`   🌍 Filtered LinkedIn results by country (${guest.country}): ${beforeCount} → ${afterCount}`);
+            return link.includes('linkedin.com/in') ||
+                link.includes('wikipedia.org') ||
+                link.includes('imdb.com') ||
+                link.includes('instagram.com/') ||
+                link.includes('x.com/') ||
+                link.includes('twitter.com/') ||
+                matchesName;
+        }).slice(0, 15);
+
+        console.log(`🤖 AI Matching: Analyzing ${aiCandidates.length} potential matches (LinkedIn and Broad search)...`);
+        const aiResult = await this.selectBestMatchWithAI(guest, aiCandidates);
+
+        if (aiResult && aiResult.confidence >= 0.6) {
+            const isLinkedIn = aiResult.url?.includes('linkedin.com/in/');
+
+            // CRITICAL: Verify location matches guest's country BEFORE extracting any data
+            let locationMismatch = false;
+            if (guest.country && aiResult.location) {
+                const locationMatches = this.verifyLocationMatch(aiResult.location, guest.country);
+                if (!locationMatches) {
+                    console.log(`❌ Match SKIPPED (wrong country): "${aiResult.location}" - Guest country: "${guest.country}"`);
+                    locationMismatch = true;
                 }
             }
 
-            const aiResult = await this.selectBestMatchWithAI(guest, filteredLinkedIn);
+            // Only process if location matches (or no country specified)
+            if (!locationMismatch) {
+                console.log(`✨ Match found! ${isLinkedIn ? '(LinkedIn)' : '(Broad Search)'} - Conf: ${Math.round(aiResult.confidence * 100)}%`);
 
-            if (aiResult && aiResult.confidence >= 0.6) {
-                // CRITICAL: Verify location matches guest's country BEFORE extracting any data
-                // Check both extracted location AND the snippet/title for location indicators
-                let locationMismatch = false;
-                if (guest.country) {
-                    const locationToCheck = aiResult.location || aiResult.snippet || aiResult.title || '';
-                    const locationMatches = this.verifyLocationMatch(locationToCheck, guest.country);
-                    if (!locationMatches) {
-                        console.log(`❌ LinkedIn SKIPPED (wrong country): "${locationToCheck.substring(0, 80)}..." - Guest country: "${guest.country}"`);
-                        locationMismatch = true;
-                        // Skip this match entirely - don't extract job title, company, or anything else
-                    } else {
-                        console.log(`✅ LinkedIn location verified for guest country: "${guest.country}"`);
-                    }
-                }
-
-                // Only process if location matches (or no country specified)
-                if (!locationMismatch) {
-                    console.log(`✨ LinkedIn match found! (${Math.round(aiResult.confidence * 100)}% confidence)`);
-
+                if (isLinkedIn) {
                     // Extract job title and company
                     let extractedJobTitle = aiResult.jobTitle;
                     let extractedCompany = aiResult.company;
@@ -2129,31 +2134,23 @@ Genereer een GEDETAILLEERD JSON-antwoord:
                         if (parsed.company) extractedCompany = parsed.company;
                     }
 
-                    // Extract from snippet if needed
-                    if (aiResult.snippet) {
-                        const ervaringMatch = aiResult.snippet.match(/([^·]+?)\s*·\s*(?:Ervaring|Experience):\s*([^·]+)/i);
-                        if (ervaringMatch) {
-                            if (!extractedJobTitle) extractedJobTitle = ervaringMatch[1].trim();
-                            if (!extractedCompany) extractedCompany = ervaringMatch[2].trim();
-                        }
-                    }
-
                     linkedinInfo.bestMatch = {
                         url: aiResult.url,
                         title: aiResult.title,
                         snippet: aiResult.snippet,
-                        jobTitle: extractedJobTitle,
-                        company: extractedCompany
+                        jobTitle: extractedJobTitle || aiResult.extractedJobTitle,
+                        company: extractedCompany || aiResult.extractedCompany
                     };
-                    linkedinInfo.candidates = platforms.linkedin.map(r => ({
-                        url: r.link,
-                        title: r.title,
-                        snippet: r.snippet
-                    }));
-
-                    // SKIP LinkedIn scraping - info comes from Google snippets
-                    // This saves 5-10 seconds and avoids LinkedIn blocking
+                } else {
+                    // It's a broad search match (Wikipedia, Official site, etc.)
+                    fallbackMatch = aiResult;
                 }
+
+                linkedinInfo.candidates = platforms.linkedin.map(r => ({
+                    url: r.link,
+                    title: r.title,
+                    snippet: r.snippet
+                }));
             }
         }
 
