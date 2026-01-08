@@ -311,17 +311,33 @@ Return JSON:
         const terms = countryMap[targetLower] || [targetLower];
         const isMatch = terms.some(term => locLower.includes(term.toLowerCase()));
 
-        if (!isMatch) {
-            // Check if it mentions a strong city from ANOTHER country
-            const allOtherCities = Object.entries(countryMap)
-                .filter(([country]) => country !== targetLower)
-                .flatMap(([, cityList]) => cityList)
-                .filter(term => !terms.includes(term)); // Don't include terms that are also in target
+        // Check if location explicitly mentions a DIFFERENT country
+        const allOtherTerms = Object.entries(countryMap)
+            .filter(([country]) => !terms.includes(country)) // Exclude target country
+            .flatMap(([, termList]) => termList);
 
-            const mentionsOtherCountry = allOtherCities.some(city => locLower.includes(city.toLowerCase()));
-            if (mentionsOtherCountry) return false;
+        const mentionsOtherCountry = allOtherTerms.some(term => locLower.includes(term.toLowerCase()));
+
+        // STRICT: If location mentions another country, it's NOT a match
+        if (mentionsOtherCountry && !isMatch) {
+            console.log(`❌ Location mismatch: "${location}" contains terms from a different country than "${targetCountry}"`);
+            return false;
         }
 
+        // If location matches target country terms, it's a match
+        if (isMatch) {
+            console.log(`✅ Location verified: "${location}" matches guest country: "${targetCountry}"`);
+            return true;
+        }
+
+        // If location doesn't match AND doesn't mention another country, allow it (could be a city we don't know)
+        // But if it mentions another known country, reject it
+        if (mentionsOtherCountry) {
+            console.log(`❌ Location mismatch: "${location}" is from a different country than "${targetCountry}"`);
+            return false;
+        }
+
+        // Unknown location - can't verify, assume no issue
         return true;
     }
 
