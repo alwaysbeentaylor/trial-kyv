@@ -16,7 +16,7 @@ class GoogleSearchService {
         this.apiKey = process.env.TWO_CAPTCHA_API_KEY;
         this.proxyUrl = process.env.PROXY_URL;
         this.proxyAgent = this.proxyUrl ? new HttpsProxyAgent(this.proxyUrl) : null;
-        
+
         // Log configuration on startup
         console.log('🔧 GoogleSearchService initialized:');
         console.log(`   📦 2Captcha API Key: ${this.apiKey ? '✅ Set (' + this.apiKey.substring(0, 8) + '...)' : '❌ NOT SET!'}`);
@@ -29,7 +29,7 @@ class GoogleSearchService {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
         ];
         this.currentUserAgent = this.userAgents[0];
-        
+
         // EU Region proxy - single IP for better reliability
         this.proxyPool = [
             'https://u1bda9df9575305d3-zone-custom-region-eu:u1bda9df9575305d3@43.157.126.177:2333'
@@ -39,31 +39,31 @@ class GoogleSearchService {
         this.rotateProxyOnNextLaunch = false;
         this.currentProxyInfo = null;
     }
-    
+
     /**
      * Get next proxy from rotation pool
      */
     getNextProxy() {
         if (this.proxyPool.length === 0) return null;
-        
+
         // Try to find a proxy that hasn't failed recently
         let attempts = 0;
         while (attempts < this.proxyPool.length) {
             const proxy = this.proxyPool[this.currentProxyIndex];
             this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxyPool.length;
-            
+
             // Skip if this proxy failed recently
             if (!this.failedProxies.has(proxy)) {
                 return proxy;
             }
             attempts++;
         }
-        
+
         // All proxies failed, reset and try again
         this.failedProxies.clear();
         return this.proxyPool[0];
     }
-    
+
     /**
      * Mark proxy as failed
      */
@@ -110,7 +110,7 @@ class GoogleSearchService {
             await this.closeBrowser();
             this.rotateProxyOnNextLaunch = false;
         }
-        
+
         if (!this.browser) {
             const args = [
                 '--no-sandbox',
@@ -134,7 +134,7 @@ class GoogleSearchService {
                         const [, auth, host, port] = urlMatch;
                         let username = null;
                         let password = null;
-                        
+
                         if (auth) {
                             // Split auth on last colon (password can't contain colons)
                             const lastColonIndex = auth.lastIndexOf(':');
@@ -145,7 +145,7 @@ class GoogleSearchService {
                                 username = auth;
                             }
                         }
-                        
+
                         args.push(`--proxy-server=${host}:${port}`);
                         // Store proxy auth for later use
                         this.currentProxyAuth = username && password ? { username, password } : null;
@@ -159,7 +159,7 @@ class GoogleSearchService {
                         const [, auth, host, port] = urlMatch;
                         let username = null;
                         let password = null;
-                        
+
                         if (auth) {
                             const lastColonIndex = auth.lastIndexOf(':');
                             if (lastColonIndex > 0) {
@@ -169,7 +169,7 @@ class GoogleSearchService {
                                 username = auth;
                             }
                         }
-                        
+
                         args.push(`--proxy-server=${host}:${port}`);
                         this.currentProxyAuth = username && password ? { username, password } : null;
                         this.currentProxyInfo = { url: this.proxyUrl, host, port, username, password };
@@ -180,24 +180,49 @@ class GoogleSearchService {
 
             // Check if running in serverless environment or Render (which also needs chromium)
             // Render sets RENDER=true, or we can detect by checking if chromium executable exists
-            const isServerless = process.env.AWS_LAMBDA_FUNCTION_VERSION || 
-                                 process.env.VERCEL || 
-                                 process.env.RENDER === 'true' ||
-                                 process.env.RENDER_SERVICE_ID; // Render sets this automatically
+            const isServerless = process.env.AWS_LAMBDA_FUNCTION_VERSION ||
+                process.env.VERCEL ||
+                process.env.RENDER === 'true' ||
+                process.env.RENDER_SERVICE_ID; // Render sets this automatically
 
             // Timeout configuration: longer for production/serverless
             const browserLaunchTimeout = isServerless ? 60000 : 30000;
 
             if (isServerless) {
                 console.log('🌐 Using @sparticuz/chromium for serverless environment');
+
+                // Additional stealth args to avoid bot detection
+                const stealthArgs = [
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-infobars',
+                    '--window-size=1920,1080',
+                    '--start-maximized',
+                    '--disable-extensions',
+                    '--no-first-run',
+                    '--disable-default-apps',
+                    '--disable-popup-blocking',
+                    '--disable-translate',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-component-update',
+                    '--lang=nl-NL,nl',
+                    '--accept-lang=nl-NL,nl,en-US,en'
+                ];
+
+                // Combine all args, removing duplicates
+                const allArgs = [...new Set([...chromium.args, ...args, ...stealthArgs])];
+
                 this.browser = await puppeteer.launch({
-                    args: chromium.args.concat(args),
-                    defaultViewport: chromium.defaultViewport,
+                    args: allArgs,
+                    defaultViewport: { width: 1920, height: 1080 },
                     executablePath: await chromium.executablePath(),
-                    headless: chromium.headless,
-                    timeout: browserLaunchTimeout
+                    headless: 'new', // Use new headless mode - harder to detect
+                    timeout: browserLaunchTimeout,
+                    ignoreDefaultArgs: ['--enable-automation'] // Remove automation flag
                 });
-                
+
                 // Set default timeouts for all pages created from this browser in production
                 this.browser.on('targetcreated', async (target) => {
                     const page = await target.page();
@@ -371,7 +396,7 @@ class GoogleSearchService {
             // Wait for results
             const isProductionPagination = process.env.RENDER === 'true' || process.env.VERCEL || process.env.RENDER_SERVICE_ID;
             const paginationSelectorTimeout = isProductionPagination ? 20000 : 10000;
-            await page.waitForSelector('#search, #rso', { timeout: paginationSelectorTimeout }).catch(() => {});
+            await page.waitForSelector('#search, #rso', { timeout: paginationSelectorTimeout }).catch(() => { });
 
             // Extract results
             const results = await page.evaluate((num) => {
@@ -420,18 +445,18 @@ class GoogleSearchService {
             const page = await browser.newPage();
 
             // Set page-level default timeouts (production needs longer timeouts)
-            const isProduction = process.env.RENDER === 'true' || 
-                                process.env.VERCEL || 
-                                process.env.RENDER_SERVICE_ID;
+            const isProduction = process.env.RENDER === 'true' ||
+                process.env.VERCEL ||
+                process.env.RENDER_SERVICE_ID;
             const NAVIGATION_TIMEOUT = isProduction ? 60000 : 30000;
             const DEFAULT_TIMEOUT = isProduction ? 60000 : 30000;
             const SELECTOR_TIMEOUT = isProduction ? 20000 : 10000;
-            
+
             page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
             page.setDefaultTimeout(DEFAULT_TIMEOUT);
-            
+
             if (isProduction) {
-                console.log(`⏱️ Production mode: Using ${NAVIGATION_TIMEOUT/1000}s timeouts`);
+                console.log(`⏱️ Production mode: Using ${NAVIGATION_TIMEOUT / 1000}s timeouts`);
             }
 
             // Authenticate proxy before any navigation
@@ -456,6 +481,111 @@ class GoogleSearchService {
             await page.setUserAgent(this.getRandomUserAgent());
             await page.setViewport({ width: 1920, height: 1080 });
 
+            // === STEALTH EVASION SCRIPTS ===
+            // These scripts run before any page loads to mask automation
+            await page.evaluateOnNewDocument(() => {
+                // Override webdriver property
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                    configurable: true
+                });
+
+                // Override plugins to look like a real browser
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [
+                        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                    ],
+                    configurable: true
+                });
+
+                // Override languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['nl-NL', 'nl', 'en-US', 'en'],
+                    configurable: true
+                });
+
+                // Override permissions query
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+
+                // Override chrome runtime
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function () { },
+                    csi: function () { },
+                    app: {}
+                };
+
+                // Remove automation indicators from window
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+                // Override Hairline feature detection  
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'Win32',
+                    configurable: true
+                });
+
+                // Make permissions look natural
+                Object.defineProperty(navigator, 'hardwareConcurrency', {
+                    get: () => 8,
+                    configurable: true
+                });
+
+                Object.defineProperty(navigator, 'deviceMemory', {
+                    get: () => 8,
+                    configurable: true
+                });
+
+                // Override connection type
+                Object.defineProperty(navigator, 'connection', {
+                    get: () => ({
+                        effectiveType: '4g',
+                        rtt: 50,
+                        downlink: 10,
+                        saveData: false
+                    }),
+                    configurable: true
+                });
+            });
+
+            // Add extra headers to look more like a real browser
+            await page.setExtraHTTPHeaders({
+                'Accept-Language': 'nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Cache-Control': 'max-age=0',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
+            });
+
+
+            // === DEBUG LOGGING FOR RENDER ===
+            if (isProduction || retryCount === 0) {
+                console.log('🔧 === BROWSER CONFIG DEBUG ===');
+                console.log(`   🌐 Environment: ${isProduction ? 'PRODUCTION (Render/Vercel)' : 'LOCAL'}`);
+                console.log(`   👤 User-Agent: ${this.getRandomUserAgent().substring(0, 50)}...`);
+                console.log(`   🔌 Proxy: ${this.currentProxyInfo ? this.currentProxyInfo.host + ':' + this.currentProxyInfo.port : 'NONE'}`);
+                console.log(`   🔐 Proxy Auth: ${this.currentProxyAuth ? 'YES' : 'NO'}`);
+                console.log(`   🕵️ Stealth Mode: ENABLED (webdriver override, fake plugins, headers)`);
+                console.log(`   🖥️ Headless: new (stealth mode)`);
+                console.log(`   📐 Viewport: 1920x1080`);
+                console.log('================================');
+            }
+
             // DISABLED: Cookie reuse was causing Protocol errors and instability
             // Each search uses a fresh session which is more reliable
             this.cookies.clear();
@@ -475,6 +605,10 @@ class GoogleSearchService {
 
             const encodedQuery = encodeURIComponent(query);
             const searchUrl = `https://${googleDomain}/search?q=${encodedQuery}&hl=nl&num=${maxResults}`;
+
+            if (isProduction) {
+                console.log(`🔍 DEBUG: Navigating to: ${searchUrl.substring(0, 80)}...`);
+            }
 
             const handleConsent = async () => {
                 try {
@@ -521,11 +655,29 @@ class GoogleSearchService {
 
             // Wait a bit for page to fully load before checking CAPTCHA
             await this.delay(1000);
-            
+
+            // Debug: Log page info after load
+            if (isProduction) {
+                try {
+                    const currentUrl = page.url();
+                    const pageTitle = await page.title();
+                    console.log('📄 DEBUG: Page loaded');
+                    console.log(`   🔗 URL: ${currentUrl.substring(0, 100)}${currentUrl.length > 100 ? '...' : ''}`);
+                    console.log(`   📝 Title: ${pageTitle.substring(0, 60)}${pageTitle.length > 60 ? '...' : ''}`);
+
+                    // Quick check for obvious block indicators
+                    if (currentUrl.includes('/sorry') || currentUrl.includes('captcha')) {
+                        console.log('   ⚠️ WARNING: URL indicates possible block/CAPTCHA page!');
+                    }
+                } catch (e) {
+                    console.log(`   ⚠️ Could not get page info: ${e.message}`);
+                }
+            }
+
             let captchaDetected = await this.detectCaptcha(page);
             if (captchaDetected) {
                 console.log(`🔒 Google reCAPTCHA detected! (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-                
+
                 // Log page info for debugging
                 try {
                     const pageTitle = await page.title();
@@ -535,7 +687,7 @@ class GoogleSearchService {
                 } catch (e) {
                     // Ignore
                 }
-                
+
                 let solved = false;
                 if (this.apiKey) {
                     solved = await this.solveCaptcha(page, searchUrl);
@@ -545,7 +697,7 @@ class GoogleSearchService {
                         await loadSearchPage();
                         await this.delay(2000); // Wait for page to load
                         captchaDetected = await this.detectCaptcha(page);
-                        
+
                         if (captchaDetected) {
                             // CAPTCHA appeared AGAIN after solving - this proxy/session is flagged
                             console.log('⚠️ CAPTCHA re-appeared after solving! Proxy is flagged - rotating...');
@@ -553,7 +705,7 @@ class GoogleSearchService {
                             this.cookies.clear();
                             this.markProxyFailed(this.getCurrentProxy());
                             await this.closeBrowser();
-                            
+
                             if (retryCount < MAX_RETRIES - 1) {
                                 console.log('🔄 Retrying with fresh proxy...');
                                 return this.search(query, maxResults, retryCount + 1);
@@ -590,7 +742,7 @@ class GoogleSearchService {
                 await page.waitForSelector('#search, #rso, #topstuff, .g', { timeout: SELECTOR_TIMEOUT });
             } catch (e) {
                 console.log('⚠️ Search results container not found, checking page content...');
-                
+
                 // Re-check for captcha - might have been missed
                 const lateCaptcha = await this.detectCaptcha(page);
                 if (lateCaptcha) {
@@ -602,7 +754,7 @@ class GoogleSearchService {
                             await this.delay(2000);
                             await loadSearchPage();
                             // Try waiting for results again
-                            await page.waitForSelector('#search, #rso', { timeout: SELECTOR_TIMEOUT }).catch(() => {});
+                            await page.waitForSelector('#search, #rso', { timeout: SELECTOR_TIMEOUT }).catch(() => { });
                         } else {
                             console.log('❌ Failed to solve late CAPTCHA');
                             await page.close();
@@ -637,7 +789,7 @@ class GoogleSearchService {
 
             const results = await page.evaluate((maxResults) => {
                 const items = [];
-                
+
                 // Try multiple selectors for Google results
                 const selectors = [
                     'div.g',
@@ -647,7 +799,7 @@ class GoogleSearchService {
                     '.yuRUbf',
                     'div[jscontroller]'
                 ];
-                
+
                 let resultElements = [];
                 for (const selector of selectors) {
                     resultElements = document.querySelectorAll(selector);
@@ -724,7 +876,7 @@ class GoogleSearchService {
             // Check for "unusual traffic" message in page content (case-insensitive)
             const content = await page.content();
             const contentLower = content.toLowerCase();
-            
+
             const captchaIndicators = [
                 'unusual traffic',
                 'not a robot',
@@ -743,7 +895,7 @@ class GoogleSearchService {
                 '/sorry/index',
                 'ipv4.google.com/sorry'
             ];
-            
+
             for (const indicator of captchaIndicators) {
                 if (contentLower.includes(indicator.toLowerCase())) {
                     console.log(`🔒 CAPTCHA detected: "${indicator}" found in page content`);
@@ -779,7 +931,7 @@ class GoogleSearchService {
     async solveCaptcha(page, pageUrl) {
         try {
             console.log('🔍 Attempting to extract reCAPTCHA sitekey...');
-            
+
             // Set up network listener to catch sitekey from requests
             let sitekeyFromNetwork = null;
             const networkListener = async (response) => {
@@ -797,38 +949,39 @@ class GoogleSearchService {
                 }
             };
             page.on('response', networkListener);
-            
+
             // Wait for CAPTCHA to fully load - critical for production
             try {
                 // Wait for any recaptcha iframe or element to appear
                 const isProduction = process.env.RENDER === 'true' || process.env.VERCEL || process.env.RENDER_SERVICE_ID;
                 const captchaWaitTimeout = isProduction ? 10000 : 5000;
-                await page.waitForSelector('iframe[src*="recaptcha"], .g-recaptcha, [data-sitekey]', { 
-                    timeout: captchaWaitTimeout 
+                await page.waitForSelector('iframe[src*="recaptcha"], .g-recaptcha, [data-sitekey]', {
+                    timeout: captchaWaitTimeout
                 }).catch(() => {
                     console.log('⚠️ CAPTCHA elements not found with waitForSelector, trying anyway...');
                 });
-                
+
                 // Additional wait for dynamic content - longer in production
                 await this.delay(process.env.RENDER === 'true' ? 4000 : 2000);
             } catch (e) {
                 console.log('⚠️ Wait for CAPTCHA elements timed out, continuing...');
             }
 
+            // Extract reCAPTCHA sitekey - improved extraction with retries
+            let sitekey = null;
+            let extractionAttempt = 0;
+            const maxExtractionAttempts = 3;
+
             // Use sitekey from network if found
             if (sitekeyFromNetwork) {
                 sitekey = sitekeyFromNetwork;
                 console.log(`🔑 Using sitekey from network request`);
             }
-            
-            // Extract reCAPTCHA sitekey - improved extraction with retries
-            let extractionAttempt = 0;
-            const maxExtractionAttempts = 3;
-            
+
             while (!sitekey && extractionAttempt < maxExtractionAttempts) {
                 extractionAttempt++;
                 console.log(`🔍 Sitekey extraction attempt ${extractionAttempt}/${maxExtractionAttempts}...`);
-                
+
                 sitekey = await page.evaluate(() => {
                     const debug = {
                         iframes: [],
@@ -836,7 +989,7 @@ class GoogleSearchService {
                         scripts: [],
                         found: null
                     };
-                    
+
                     // Method 1: Try to find sitekey in iframe src (most reliable)
                     const iframes = document.querySelectorAll('iframe');
                     for (const iframe of iframes) {
@@ -897,7 +1050,7 @@ class GoogleSearchService {
                         /recaptcha[^"']*["']([A-Za-z0-9_-]{40})["']/i,
                         /\/recaptcha\/api2\/anchor\?k=([A-Za-z0-9_-]+)/i
                     ];
-                    
+
                     for (const pattern of patterns) {
                         const match = html.match(pattern);
                         if (match && match[1] && match[1].length > 20) {
@@ -917,9 +1070,9 @@ class GoogleSearchService {
                                     if (response) {
                                         // Can't get sitekey from response, but widget exists
                                     }
-                                } catch (e) {}
+                                } catch (e) { }
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     // Log debug info for troubleshooting
@@ -935,17 +1088,17 @@ class GoogleSearchService {
 
             // Remove network listener
             page.removeListener('response', networkListener);
-            
+
             if (!sitekey) {
                 console.log('⚠️ Could not extract reCAPTCHA sitekey from page');
-                
+
                 // Debug: Log page content to help troubleshoot
                 try {
                     const pageContent = await page.content();
                     const hasRecaptcha = pageContent.includes('recaptcha') || pageContent.includes('g-recaptcha');
                     const hasIframe = pageContent.includes('<iframe');
                     console.log(`   📊 Debug: Page has 'recaptcha': ${hasRecaptcha}, has iframes: ${hasIframe}`);
-                    
+
                     // Try to get all iframe sources
                     const iframeSources = await page.evaluate(() => {
                         const iframes = Array.from(document.querySelectorAll('iframe'));
@@ -960,7 +1113,7 @@ class GoogleSearchService {
                 } catch (e) {
                     console.log(`   ⚠️ Could not get debug info: ${e.message}`);
                 }
-                
+
                 return false;
             } else {
                 console.log(`🔑 Extracted sitekey: ${sitekey.substring(0, 20)}...`);
@@ -1053,7 +1206,7 @@ class GoogleSearchService {
                     widgets.forEach((widget, i) => {
                         try {
                             grecaptcha.getResponse(i);
-                        } catch (e) {}
+                        } catch (e) { }
                     });
                 }
 
