@@ -52,19 +52,22 @@ class GoogleSearchService {
      */
     async searchWithSerpApi(query, maxResults = 10) {
         if (!this.serpApiKey) {
-            console.log('⚠️ SERP API key not set, falling back to Puppeteer');
+            console.log('⚠️ SERP API key not set, falling back');
             return null;
         }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 35000); // 35s timeout
 
         try {
             console.log(`🔍 SERP API: Searching "${query.substring(0, 50)}..."`);
 
             // Build Google search URL with parameters
-            // Adding brd_json=1 to the URL is the correct way for Bright Data SERP API to return JSON
             const searchUrl = `https://www.google.nl/search?q=${encodeURIComponent(query)}&hl=nl&num=${maxResults}&brd_json=1`;
 
             const response = await fetch(this.serpApiEndpoint, {
                 method: 'POST',
+                signal: controller.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.serpApiKey}`
@@ -72,9 +75,11 @@ class GoogleSearchService {
                 body: JSON.stringify({
                     zone: this.serpApiZone,
                     url: searchUrl,
-                    format: 'raw' // Even with format: raw, the brd_json=1 parameter makes it return JSON string
+                    format: 'raw'
                 })
             });
+
+            clearTimeout(timeout);
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -82,31 +87,51 @@ class GoogleSearchService {
                 return null;
             }
 
-            const data = await response.json();
-            console.log(`✅ SERP API: Got JSON response`);
+            const text = await response.text();
 
-            // Extract results from JSON
-            let results = [];
-            if (data.organic) {
-                results = data.organic.map(item => ({
-                    link: item.link || item.url,
-                    title: item.title,
-                    snippet: item.snippet || item.description || ''
-                }));
-            } else if (data.results) {
-                results = data.results.map(item => ({
-                    link: item.url || item.link,
-                    title: item.title,
-                    snippet: item.snippet || ''
-                }));
+            // Try parsing as JSON first
+            try {
+                const data = JSON.parse(text);
+                console.log(`✅ SERP API: Got JSON response`);
+
+                // Extract results from JSON
+                let results = [];
+                if (data.organic) {
+                    results = data.organic.map(item => ({
+                        link: item.link || item.url,
+                        title: item.title,
+                        snippet: item.snippet || item.description || ''
+                    }));
+                } else if (data.results) {
+                    results = data.results.map(item => ({
+                        link: item.url || item.link,
+                        title: item.title,
+                        snippet: item.snippet || ''
+                    }));
+                }
+
+                if (results.length > 0) {
+                    console.log(`📊 SERP API: Parsed ${results.length} results from JSON`);
+                    return results.slice(0, maxResults);
+                }
+            } catch (jsonErr) {
+                console.log(`⚠️ SERP API response not JSON, attempting HTML parsing...`);
+                const results = this.parseGoogleHtml(text, maxResults);
+                if (results.length > 0) {
+                    console.log(`📊 SERP API: Parsed ${results.length} results from HTML`);
+                    return results;
+                }
             }
 
-            console.log(`📊 SERP API: Parsed ${results.length} results`);
-            return results.slice(0, maxResults);
+            return null;
 
         } catch (error) {
-            console.error(`❌ SERP API error: ${error.message}`);
-            // If JSON parsing fails, maybe it returned raw HTML?
+            clearTimeout(timeout);
+            if (error.name === 'AbortError') {
+                console.error(`❌ SERP API error: Request timed out after 35s`);
+            } else {
+                console.error(`❌ SERP API error: ${error.message}`);
+            }
             return null;
         }
     }
@@ -644,13 +669,33 @@ class GoogleSearchService {
         const MAX_RETRIES = 4;
         await this.ensureDelay();
 
-        // === TRY SERP API FIRST (RECOMMENDED - NO CAPTCHAS) ===
+        const isProduction = process.env.RENDER === 'true' ||
+            process.env.VERCEL ||
+            process.env.RENDER_SERVICE_ID;
+
+        // === TRY SERP API FIRST (RECOMMENDED - NO CAPTCHAs) ===
         if (this.useSerpApi && retryCount === 0) {
             const serpResults = await this.searchWithSerpApi(query, maxResults);
             if (serpResults && serpResults.length > 0) {
                 return serpResults;
             }
+
+            if (isProduction) {
+                console.log('⚠️ SERP API returned no results. RETRYING once...');
+                const secondAttempt = await this.searchWithSerpApi(query, maxResults);
+                if (secondAttempt && secondAttempt.length > 0) return secondAttempt;
+
+                console.log('❌ SERP API failed twice in production. Puppeteer fallback disabled to avoid 5-minute hangs.');
+                return [];
+            }
+
             console.log('⚠️ SERP API returned no results, trying Puppeteer fallback...');
+        }
+
+        // === FALLBACK TO PUPPETEER (Local only) ===
+        if (isProduction && !this.useSerpApi) {
+            console.log('❌ Search requested in production but SERP API is disabled. Puppeteer fallback blocked.');
+            return [];
         }
 
         // === FALLBACK TO PUPPETEER ===

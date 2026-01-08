@@ -61,23 +61,23 @@ router.post('/:guestId', async (req, res) => {
         } catch (error) {
             console.error('❌ Research failed:', error.message);
             console.error('Stack:', error.stack);
-            
+
             // Check for common issues
             if (error.message.includes('timeout')) {
-                return res.status(504).json({ 
+                return res.status(504).json({
                     error: 'Research timeout - dit kan gebeuren als de zoekopdrachten te lang duren. Probeer het opnieuw.',
                     details: 'De research heeft meer dan 180 seconden geduurd. Dit kan komen door trage API responses of captcha problemen.'
                 });
             }
-            
+
             if (error.message.includes('2Captcha') || error.message.includes('captcha')) {
-                return res.status(500).json({ 
+                return res.status(500).json({
                     error: 'Google Search faalt - 2Captcha API key probleem',
                     details: 'Controleer of TWO_CAPTCHA_API_KEY correct is ingesteld in Render environment variables.'
                 });
             }
-            
-            return res.status(500).json({ 
+
+            return res.status(500).json({
                 error: 'Research mislukt',
                 details: error.message
             });
@@ -92,12 +92,12 @@ router.post('/:guestId', async (req, res) => {
         console.log(`   Twitter: ${searchResults.twitterHandle || 'Not found'}`);
         console.log(`   Website: ${searchResults.websiteUrl || 'Not found'}`);
         console.log(`   VIP Score: ${searchResults.vipScore}`);
-        
+
         // Check if we found anything at all
-        if (!searchResults.linkedinUrl && 
+        if (!searchResults.linkedinUrl &&
             (!searchResults.linkedinCandidates || searchResults.linkedinCandidates.length === 0) &&
-            !searchResults.instagramHandle && 
-            !searchResults.twitterHandle && 
+            !searchResults.instagramHandle &&
+            !searchResults.twitterHandle &&
             !searchResults.websiteUrl) {
             console.warn('⚠️ WARNING: No results found for guest. This could indicate:');
             console.warn('   1. TWO_CAPTCHA_API_KEY not set or invalid');
@@ -911,7 +911,24 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
                 setTimeout(() => reject(new Error('Research timeout (180s)')), 180000)
             );
 
-            const searchResults = await Promise.race([researchPromise, timeoutPromise]);
+            // Create a promise for manual skip/stop
+            const skipPromise = new Promise((resolve) => {
+                const checkStatus = setInterval(() => {
+                    if (queue.skipCurrent || queue.status === 'stopped') {
+                        clearInterval(checkStatus);
+                        resolve('skipped');
+                    }
+                }, 500);
+            });
+
+            const result = await Promise.race([researchPromise, timeoutPromise, skipPromise]);
+
+            if (result === 'skipped') {
+                console.log(`⏭️ Skipped ${guest.full_name} by user.`);
+                return { guestId, skipped: true };
+            }
+
+            const searchResults = result;
             const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
             const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
 
