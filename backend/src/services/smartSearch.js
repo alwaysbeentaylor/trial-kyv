@@ -1973,120 +1973,102 @@ Return JSON:
         }
 
         // ============================================
-        // STEP 1: Build Priority Queries (ALWAYS include name + company if known)
+        // STEP 1: Celebrity Probe (Dedicated Broad Search)
         // ============================================
-        console.log('🔍 Step 1: Building priority search queries...');
-        const priorityQueries = [];
+        console.log(`🔍 Step 1: Probing for Celebrity/Public Figure status...`);
+        const probeQuery = `"${guest.full_name}"`;
+        const probeResults = await googleSearch.search(probeQuery, 8);
 
-        // Step 1.1: General Broad Search (Essential for Celebrity/Public Figure Detection)
-        priorityQueries.push(`"${guest.full_name}"`);
+        if (probeResults && probeResults.length > 0) {
+            for (const result of probeResults) {
+                if (result.link && !seenUrls.has(result.link)) {
+                    seenUrls.add(result.link);
+                    allResults.push(result);
+                    if (result.link.includes('linkedin.com/in/')) linkedInFound = true;
+                }
+            }
 
-        // LinkedIn queries (always first)
-        priorityQueries.push(`site:linkedin.com/in "${guest.full_name}"`);
-
-        // Add country-specific queries with common country name variations
-        if (guest.country) {
-            const countryTerms = this.getCountrySearchTerms(guest.country);
-            countryTerms.forEach(term => {
-                priorityQueries.push(`site:linkedin.com/in "${guest.full_name}" ${term}`.trim());
-            });
-        }
-
-        // ALWAYS add name + company if known (from input OR email domain)
-        if (effectiveCompany) {
-            priorityQueries.push(`"${guest.full_name}" "${effectiveCompany}"`);
-            if (guest.country) {
-                const countryTerms = this.getCountrySearchTerms(guest.country);
-                countryTerms.forEach(term => {
-                    priorityQueries.push(`"${guest.full_name}" ${effectiveCompany} ${term}`.trim());
-                });
-            } else {
-                priorityQueries.push(`"${guest.full_name}" ${effectiveCompany} ${guest.country || ''}`.trim());
+            // AI Celebrity Detection on early results
+            const aiDetection = await this.detectCelebrityWithAI(guest, allResults);
+            if (aiDetection && aiDetection.isCelebrity && aiDetection.confidence >= 0.8) {
+                celebrityInfo = aiDetection;
+                console.log(`🌟 Confirmed Public Figure. Skipping deep person-search to avoid namesake mismatches.`);
+                // BRANCH: Skip to Extraction Step
             }
         }
 
-        // Add name + location if city known
-        if (guest.city) {
+        // ============================================
+        // STEP 2: Building targeted queries (SKIP if already confirmed celebrity)
+        // ============================================
+        if (!celebrityInfo.isCelebrity) {
+            console.log('🔍 Step 2: Building targeted search queries (Normal person search)...');
+            const priorityQueries = [];
+
+            // LinkedIn queries (already did one broad one in probe, now targeted)
+            priorityQueries.push(`site:linkedin.com/in "${guest.full_name}"`);
+
+            // Add country-specific queries with common country name variations
             if (guest.country) {
                 const countryTerms = this.getCountrySearchTerms(guest.country);
                 countryTerms.forEach(term => {
-                    priorityQueries.push(`"${guest.full_name}" ${guest.city} ${term}`.trim());
+                    priorityQueries.push(`site:linkedin.com/in "${guest.full_name}" ${term}`.trim());
                 });
-            } else {
-                priorityQueries.push(`"${guest.full_name}" ${guest.city} ${guest.country || ''}`.trim());
             }
-        }
 
-        // Remove duplicates and filter short queries
-        const uniqueQueries = [...new Set(priorityQueries)].filter(q => q.length > 15);
+            // ALWAYS add name + company if known (from input OR email domain)
+            if (effectiveCompany) {
+                priorityQueries.push(`"${guest.full_name}" "${effectiveCompany}"`);
+                if (guest.country) {
+                    const countryTerms = this.getCountrySearchTerms(guest.country);
+                    countryTerms.forEach(term => {
+                        priorityQueries.push(`"${guest.full_name}" ${effectiveCompany} ${term}`.trim());
+                    });
+                }
+            }
 
-        console.log(`📝 Using ${uniqueQueries.length} priority queries`);
-        if (effectiveCompany) {
-            console.log(`   📌 Including company: ${effectiveCompany}`);
-        }
+            // Remove duplicates and filter short queries
+            const uniqueQueries = [...new Set(priorityQueries)].filter(q => q.length > 15 && q !== probeQuery);
 
-        // ============================================
-        // STEP 2: Search (Google ONLY - exclusive use as requested)
-        // ============================================
-        const allResults = [];
-        const seenUrls = new Set();
-        let linkedInFound = false;
-        let googleFailed = false;
+            console.log(`📝 Using ${uniqueQueries.length} targeted queries`);
 
-        // Try Google Search first (better quality results)
-        console.log('🔍 Step 2: Using Google Search (primary - better results)...');
+            // Execute queries in chunks of 3 for parallel speed but safety
+            const CHUNK_SIZE = 3;
+            for (let i = 0; i < uniqueQueries.length; i += CHUNK_SIZE) {
+                const chunk = uniqueQueries.slice(i, i + CHUNK_SIZE);
+                console.log(`   🔎 Processing batch of ${chunk.length} queries...`);
 
-        // Execute queries in chunks of 3 for parallel speed but safety
-        const CHUNK_SIZE = 3;
-        for (let i = 0; i < uniqueQueries.length; i += CHUNK_SIZE) {
-            const chunk = uniqueQueries.slice(i, i + CHUNK_SIZE);
-            console.log(`   🔎 Processing batch of ${chunk.length} queries...`);
+                const chunkPromises = chunk.map(query => googleSearch.search(query, 5));
+                const chunkResults = await Promise.allSettled(chunkPromises);
 
-            const chunkPromises = chunk.map(query => googleSearch.search(query, 5));
-            const chunkResults = await Promise.allSettled(chunkPromises);
+                chunkResults.forEach((res, index) => {
+                    const query = chunk[index];
+                    if (res.status === 'fulfilled' && res.value) {
+                        const results = res.value;
+                        console.log(`   📊 Query "${query.substring(0, 30)}..." returned ${results.length} results`);
 
-            chunkResults.forEach((res, index) => {
-                const query = chunk[index];
-                if (res.status === 'fulfilled' && res.value) {
-                    const results = res.value;
-                    console.log(`   📊 Query "${query.substring(0, 30)}..." returned ${results.length} results`);
+                        for (const result of results) {
+                            if (result.link && !seenUrls.has(result.link)) {
+                                seenUrls.add(result.link);
+                                allResults.push(result);
 
-                    if (results.length === 0 && i + index === 0) {
-                        googleFailed = true;
-                    }
-
-                    for (const result of results) {
-                        if (result.link && !seenUrls.has(result.link)) {
-                            seenUrls.add(result.link);
-                            allResults.push(result);
-
-                            if (result.link.includes('linkedin.com/in/')) {
-                                linkedInFound = true;
-                                console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                                if (result.link.includes('linkedin.com/in/')) {
+                                    linkedInFound = true;
+                                    console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                                }
                             }
                         }
+                    } else {
+                        console.error(`   ❌ Query failed: ${query.substring(0, 50)}...`);
+                        if (i + index === 0) googleFailed = true;
                     }
-                } else {
-                    console.error(`   ❌ Query failed: ${query.substring(0, 50)}...`);
-                    if (i + index === 0) googleFailed = true;
-                }
-            });
+                });
 
-            // AFTER THE FIRST BATCH: Check for celebrity status using AI early
-            if (i === 0 && !celebrityInfo.isCelebrity && allResults.length > 0) {
-                const aiDetection = await this.detectCelebrityWithAI(guest, allResults);
-                if (aiDetection) {
-                    celebrityInfo = aiDetection;
+                // Stop if we found LinkedIn and have enough results
+                if (linkedInFound && allResults.length >= 3) {
+                    console.log(`   ✅ Sufficient results found - stopping after ${i + chunk.length} queries`);
+                    break;
                 }
             }
-
-            // Stop if we found LinkedIn and have enough results
-            if (linkedInFound && allResults.length >= 3) {
-                console.log(`   ✅ Sufficient results found - stopping after ${i + chunk.length} queries`);
-                break;
-            }
-
-            // No more delay needed between batches when using SERP API
         }
 
         // Google-only: No Brave fallback - using Google exclusively as requested
@@ -2137,12 +2119,6 @@ Return JSON:
 
         if (allResults.length === 0) {
             console.error('❌ CRITICAL: No search results found at all!');
-            console.error('   Possible causes:');
-            console.error('   1. TWO_CAPTCHA_API_KEY not set or invalid');
-            console.error('   2. Google Search service failing (captcha, timeout, etc.)');
-            console.error('   3. Proxy issues (if PROXY_URL is set)');
-            console.error('   4. Network connectivity issues');
-            console.error('   💡 Check Render logs for detailed error messages');
         }
 
         // ============================================
