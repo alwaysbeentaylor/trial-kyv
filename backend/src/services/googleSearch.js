@@ -44,8 +44,9 @@ class GoogleSearchService {
     }
 
     /**
-     * Fetch residential proxies from 2Captcha API
-     * Uses the same API key as CAPTCHA solving
+     * Fetch residential proxy config from 2Captcha API
+     * Uses authenticated access (username:password) which works from any IP
+     * Unlike whitelist, this doesn't require static IP
      */
     async fetch2CaptchaProxies() {
         if (!this.apiKey) {
@@ -60,47 +61,51 @@ class GoogleSearchService {
         }
 
         try {
-            console.log('🔄 Fetching 2Captcha residential proxies...');
+            console.log('🔄 Fetching 2Captcha residential proxy credentials...');
 
-            // First check account balance/status
+            // Get account info which includes the proxy username
             const statusUrl = `https://api.2captcha.com/proxy?key=${this.apiKey}`;
             const statusRes = await fetch(statusUrl);
             const statusData = await statusRes.json();
 
-            if (statusData.status === 'OK') {
+            if (statusData.status === 'OK' && statusData.data?.username) {
+                const proxyUsername = statusData.data.username;
                 console.log(`✅ 2Captcha Proxy Account Status:`);
-                console.log(`   👤 Username: ${statusData.data?.username || 'N/A'}`);
+                console.log(`   👤 Username: ${proxyUsername}`);
                 console.log(`   📊 Traffic Used: ${statusData.data?.use_flow?.toFixed(2) || 0} MB / ${statusData.data?.total_flow || 0} MB`);
 
-                // Generate proxy connections for Netherlands (NL) - good for Dutch/EU searches
-                // Using HTTP protocol for Puppeteer compatibility
-                const generateUrl = `https://api.2captcha.com/proxy/generate_white_list_connections?key=${this.apiKey}&country=nl&protocol=http&connection_count=10`;
+                // 2Captcha residential proxy servers - these are the authenticated endpoints
+                // Format: http://username:apikey@proxy-server:port
+                // The proxy uses your 2Captcha API key as password
+                const proxyServers = [
+                    { host: 'proxy.2captcha.com', port: 8080 },
+                    { host: 'proxy.2captcha.com', port: 8888 },
+                ];
 
-                console.log('🌍 Requesting residential proxies for Netherlands (NL)...');
-                const proxyRes = await fetch(generateUrl);
-                const proxyData = await proxyRes.json();
+                // Build authenticated proxy URLs for Netherlands
+                // Adding country/region parameters to the username
+                this.residentialProxies = proxyServers.map(server => {
+                    // Username format: user-country-nl for Netherlands targeting
+                    const targetedUsername = `${proxyUsername}-country-nl`;
+                    return `http://${targetedUsername}:${this.apiKey}@${server.host}:${server.port}`;
+                });
 
-                if (proxyData.status === 'OK' && proxyData.data && proxyData.data.length > 0) {
-                    // Convert ip:port format to full proxy URLs
-                    this.residentialProxies = proxyData.data.map(p => `http://${p}`);
-                    this.lastProxyFetch = now;
+                this.lastProxyFetch = now;
 
-                    console.log(`✅ Got ${this.residentialProxies.length} residential proxies from 2Captcha:`);
-                    this.residentialProxies.forEach((p, i) => {
-                        console.log(`   ${i + 1}. ${p}`);
-                    });
+                console.log(`✅ Configured ${this.residentialProxies.length} 2Captcha residential proxy endpoints:`);
+                this.residentialProxies.forEach((p, i) => {
+                    // Log without showing full API key
+                    const masked = p.replace(this.apiKey, this.apiKey.substring(0, 8) + '...');
+                    console.log(`   ${i + 1}. ${masked}`);
+                });
 
-                    return this.residentialProxies;
-                } else {
-                    console.log('⚠️ Could not generate whitelist connections.');
-                    console.log('   Response:', JSON.stringify(proxyData));
-                    console.log('   💡 Make sure Render IP is whitelisted at: https://2captcha.com/enterpage/proxy/ip-whitelist');
-                }
+                return this.residentialProxies;
             } else {
-                console.log('⚠️ 2Captcha proxy account check failed:', statusData);
+                console.log('⚠️ 2Captcha proxy account check failed:', JSON.stringify(statusData));
+                console.log('   💡 Make sure you have residential proxy traffic at: https://2captcha.com/enterpage/proxy');
             }
         } catch (error) {
-            console.error('❌ Error fetching 2Captcha proxies:', error.message);
+            console.error('❌ Error fetching 2Captcha proxy info:', error.message);
         }
 
         return [];
@@ -263,80 +268,80 @@ class GoogleSearchService {
                     console.log(`🌐 Using proxy: ${host}:${port}${username && password ? ' (authenticated)' : ''}`);
                 }
             }
-        }
 
-        // Check if running in serverless environment or Render (which also needs chromium)
-        // Render sets RENDER=true, or we can detect by checking if chromium executable exists
-        const isServerless = process.env.AWS_LAMBDA_FUNCTION_VERSION ||
-            process.env.VERCEL ||
-            process.env.RENDER === 'true' ||
-            process.env.RENDER_SERVICE_ID; // Render sets this automatically
+            // Check if running in serverless environment or Render (which also needs chromium)
+            // Render sets RENDER=true, or we can detect by checking if chromium executable exists
+            const isServerless = process.env.AWS_LAMBDA_FUNCTION_VERSION ||
+                process.env.VERCEL ||
+                process.env.RENDER === 'true' ||
+                process.env.RENDER_SERVICE_ID; // Render sets this automatically
 
-        // Timeout configuration: longer for production/serverless
-        const browserLaunchTimeout = isServerless ? 60000 : 30000;
+            // Timeout configuration: longer for production/serverless
+            const browserLaunchTimeout = isServerless ? 60000 : 30000;
 
-        if (isServerless) {
-            console.log('🌐 Using @sparticuz/chromium for serverless environment');
+            if (isServerless) {
+                console.log('🌐 Using @sparticuz/chromium for serverless environment');
 
-            // Additional stealth args to avoid bot detection
-            const stealthArgs = [
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-infobars',
-                '--window-size=1920,1080',
-                '--start-maximized',
-                '--disable-extensions',
-                '--no-first-run',
-                '--disable-default-apps',
-                '--disable-popup-blocking',
-                '--disable-translate',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-                '--disable-component-update',
-                '--lang=nl-NL,nl',
-                '--accept-lang=nl-NL,nl,en-US,en'
-            ];
+                // Additional stealth args to avoid bot detection
+                const stealthArgs = [
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-infobars',
+                    '--window-size=1920,1080',
+                    '--start-maximized',
+                    '--disable-extensions',
+                    '--no-first-run',
+                    '--disable-default-apps',
+                    '--disable-popup-blocking',
+                    '--disable-translate',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-component-update',
+                    '--lang=nl-NL,nl',
+                    '--accept-lang=nl-NL,nl,en-US,en'
+                ];
 
-            // Combine all args, removing duplicates
-            const allArgs = [...new Set([...chromium.args, ...args, ...stealthArgs])];
+                // Combine all args, removing duplicates
+                const allArgs = [...new Set([...chromium.args, ...args, ...stealthArgs])];
 
-            this.browser = await puppeteer.launch({
-                args: allArgs,
-                defaultViewport: { width: 1920, height: 1080 },
-                executablePath: await chromium.executablePath(),
-                headless: 'new', // Use new headless mode - harder to detect
-                timeout: browserLaunchTimeout,
-                ignoreDefaultArgs: ['--enable-automation'] // Remove automation flag
-            });
-
-            // Set default timeouts for all pages created from this browser in production
-            this.browser.on('targetcreated', async (target) => {
-                const page = await target.page();
-                if (page) {
-                    page.setDefaultNavigationTimeout(60000);
-                    page.setDefaultTimeout(60000);
-                }
-            });
-        } else {
-            // Local environment - use regular puppeteer (not puppeteer-core)
-            try {
-                const puppeteerRegular = require('puppeteer');
-                this.browser = await puppeteerRegular.launch({
-                    headless: 'new',
-                    args,
-                    timeout: browserLaunchTimeout
-                });
-            } catch (error) {
-                // Fallback to chromium if regular puppeteer fails
-                console.log('⚠️ Regular puppeteer failed, falling back to chromium:', error.message);
                 this.browser = await puppeteer.launch({
-                    args: chromium.args.concat(args),
-                    defaultViewport: chromium.defaultViewport,
+                    args: allArgs,
+                    defaultViewport: { width: 1920, height: 1080 },
                     executablePath: await chromium.executablePath(),
-                    headless: chromium.headless,
-                    timeout: browserLaunchTimeout
+                    headless: 'new', // Use new headless mode - harder to detect
+                    timeout: browserLaunchTimeout,
+                    ignoreDefaultArgs: ['--enable-automation'] // Remove automation flag
                 });
+
+                // Set default timeouts for all pages created from this browser in production
+                this.browser.on('targetcreated', async (target) => {
+                    const page = await target.page();
+                    if (page) {
+                        page.setDefaultNavigationTimeout(60000);
+                        page.setDefaultTimeout(60000);
+                    }
+                });
+            } else {
+                // Local environment - use regular puppeteer (not puppeteer-core)
+                try {
+                    const puppeteerRegular = require('puppeteer');
+                    this.browser = await puppeteerRegular.launch({
+                        headless: 'new',
+                        args,
+                        timeout: browserLaunchTimeout
+                    });
+                } catch (error) {
+                    // Fallback to chromium if regular puppeteer fails
+                    console.log('⚠️ Regular puppeteer failed, falling back to chromium:', error.message);
+                    this.browser = await puppeteer.launch({
+                        args: chromium.args.concat(args),
+                        defaultViewport: chromium.defaultViewport,
+                        executablePath: await chromium.executablePath(),
+                        headless: chromium.headless,
+                        timeout: browserLaunchTimeout
+                    });
+                }
             }
         }
         return this.browser;
