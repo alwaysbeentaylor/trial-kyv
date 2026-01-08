@@ -570,11 +570,6 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     Website
                                 </a>
                             )}
-                            {isFallback && (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-xs font-medium shadow-sm animate-pulse">
-                                    ✨ Gevonden via Slimme Fallback
-                                </div>
-                            )}
 
                             {/* Sources Toggle Button */}
                             <button

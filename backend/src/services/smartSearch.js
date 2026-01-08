@@ -2354,7 +2354,13 @@ Return JSON:
         // - People with public online presence (high VIP score indicators)
 
         const hasCompanyFromEmail = Boolean(emailDomainInfo?.companyName);
-        const shouldSearchSocials = this.shouldSearchSocialMedia(celebrityInfo, linkedinInfo, { hasCompanyFromEmail });
+        let shouldSearchSocials = this.shouldSearchSocialMedia(celebrityInfo, linkedinInfo, { hasCompanyFromEmail });
+
+        // STRICT RULE: If LinkedIn is found, skip social media to reduce noise
+        if (linkedinInfo.bestMatch) {
+            console.log(`📋 LinkedIn found - Skipping social media search to reduce noise.`);
+            shouldSearchSocials = false;
+        }
 
         // TRY TO REUSE PROBE DATA FIRST (no new searches if found)
         if (allResults.length > 0) {
@@ -2408,7 +2414,7 @@ Return JSON:
 
             // Always search news in parallel too (unless we already have super strong signals for a celebrity)
             // If it's a confirmed celebrity and we already found socials in probe, we can skip news to save time
-            const skipNews = celebrityInfo.isCelebrity && (instagramResult.url || twitterResult.url);
+            const skipNews = !celebrityInfo.isCelebrity || (instagramResult.url || twitterResult.url);
             let newsIdx = -1;
 
             if (!skipNews) {
@@ -2455,9 +2461,11 @@ Return JSON:
                 instagramResult = await this.searchInstagram(guest);
             }
         } else {
-            console.log(`📋 Skipping social media search for business guest (LinkedIn is sufficient)`);
-            // Still search news for business guests
-            newsInfo = await this.searchRecentNews(guest);
+            console.log(`📋 Skipping social media search`);
+            // STRICT RULE: Only search news for confirmed public figures
+            if (celebrityInfo.isCelebrity) {
+                newsInfo = await this.searchRecentNews(guest);
+            }
         }
         // --------------------------
 
@@ -2492,22 +2500,8 @@ Return JSON:
         // Get best LinkedIn data
         const bestMatch = linkedinInfo.bestMatch;
 
-        // 📸 PHOTO SELECTION 
-        // Priority: 1. Knowledge Graph (celebrities), 2. Instagram thumbnail, 3. Twitter thumbnail, 4. None
+        // 📸 PHOTO SELECTION - DISABLED (User request: "Foto zoektoch is ook niet nodig mag weg!")
         let profilePhotoUrl = null;
-
-        if (celebrityInfo.isCelebrity && celebrityInfo.officialImage) {
-            console.log(`🖼️ Using official Knowledge Graph image for ${guest.full_name}`);
-            profilePhotoUrl = celebrityInfo.officialImage;
-        } else if (instagramResult.profilePhoto) {
-            console.log(`🖼️ Using Instagram profile photo for ${guest.full_name}`);
-            profilePhotoUrl = instagramResult.profilePhoto;
-        } else if (twitterResult.profilePhoto) {
-            console.log(`🖼️ Using Twitter profile photo for ${guest.full_name}`);
-            profilePhotoUrl = twitterResult.profilePhoto;
-        } else {
-            console.log(`🖼️ No profile photo found for ${guest.full_name}`);
-        }
 
         // Calculate total followers for VIP scoring
         const totalFollowers = (instagramResult.followers || 0) + (twitterResult.followers || 0);
