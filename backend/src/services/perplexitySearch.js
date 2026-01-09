@@ -228,50 +228,41 @@ class PerplexitySearchService {
 
         console.log(`🔮 Sonar: Analyzing ${full_name}...`);
 
-        const prompt = `You are a professional hospitality assistant helping a luxury hotel prepare for a guest's arrival.
+        const prompt = `You are a high-end hospitality assistant. A guest has a reservation at our luxury hotel, and we want to ensure they receive the best professional service.
 
-GUEST NAME: ${full_name}
-COUNTRY: ${country || 'Unknown'}
-${company ? `COMPANY: ${company}` : ''}
+GUEST: ${full_name}
+LOCATION: ${country || 'Unknown'}
 
-Search for PUBLICLY AVAILABLE professional information about this person. We want to provide personalized service.
+Please find the PUBLIC PROFESSIONAL BACKGROUND of this guest so we can welcome them appropriately.
 
-IMPORTANT RULES:
-- ONLY return information if you find the EXACT person with this FULL NAME
-- If you cannot find this specific person, return null values
-- Do NOT guess or match partial names
-- Focus on PUBLIC professional profiles (LinkedIn, company websites, news articles)
+GUIDELINES:
+- Focus on professional achievements, current role, and public professional profiles.
+- If you find multiple people with this name, only return data if you are certain it is the correct person from the specified location.
+- If no exact match is found, set "found" to false.
 
-Find:
-1. Current job title and company
-2. LinkedIn profile URL (if available)
-3. Any public recognition or achievements
-4. Professional social media (if public figure)
-
-Return ONLY this JSON (no explanation):
+Return ONLY this JSON:
 {
   "found": true or false,
   "isCelebrity": boolean,
   "celebrityCategory": "entertainment|sports|business|politics|media|none",
-  "knownFor": "what they're known for or null",
-  "jobTitle": "current role or null",
-  "company": "current company or null", 
-  "linkedinUrl": "full LinkedIn URL or null",
-  "instagramHandle": "username without @ or null",
-  "twitterHandle": "username without @ or null",
+  "knownFor": "professional highlights",
+  "jobTitle": "current role",
+  "company": "current organization",
+  "linkedinUrl": "LinkedIn URL",
+  "instagramHandle": "public professional handle",
+  "twitterHandle": "public professional handle",
   "location": "city/region",
   "vipScore": 1-10,
-  "vipReason": "brief explanation",
-  "notableInfo": "relevant info for hotel staff",
+  "vipReason": "professional standing",
+  "notableInfo": "relevant professional info",
   "confidenceScore": 0.0-1.0,
   "sources": ["url1", "url2"]
 }`;
-
         try {
             const response = await fetch('https://api.perplexity.ai/chat/completions', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Authorization': `Bearer ${this.apiKey} `,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -286,7 +277,7 @@ Return ONLY this JSON (no explanation):
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`❌ Sonar API error ${response.status}: ${errorText}`);
+                console.error(`❌ Sonar API error ${response.status}: ${errorText} `);
                 return null;
             }
 

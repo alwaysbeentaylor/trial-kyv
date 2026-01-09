@@ -557,14 +557,23 @@ Return JSON:
                     console.log(`✅ Location verified: "${finalLocation}" matches guest country: "${guest.country}"`);
                 }
 
-                // CRITICAL: Verify the result contains the guest's LAST NAME
-                // This prevents matching "Karim" from KTD Legal to guest "Karim Cheuk-a-lam"
-                const guestNameParts = guest.full_name.toLowerCase().split(/\s+/).filter(p => p.length > 2);
-                const lastName = guestNameParts[guestNameParts.length - 1]; // Get last name
+                // CRITICAL: Verify the result contains the guest's name identity
+                // This prevents matching "Sem" to "Marco" just because the last name is the same
+                const guestNameParts = guest.full_name.toLowerCase().split(/\s+/).filter(p => p.length >= 2);
+                const firstName = guestNameParts[0];
+                const lastName = guestNameParts[guestNameParts.length - 1];
                 const resultText = (bestSource.title + ' ' + bestSource.snippet).toLowerCase();
 
-                if (lastName && lastName.length > 2 && !resultText.includes(lastName)) {
+                // 1. Check last name (mandatory)
+                if (lastName && !resultText.includes(lastName)) {
                     console.log(`❌ Name mismatch! Guest last name "${lastName}" not found in result - REJECTING match`);
+                    return null;
+                }
+
+                // 2. Check first name (mandatory for non-celebrities, recommended for celebrities)
+                // We allow a bit more flexibility for celebrities (stage names), but for normal guests, the first name must match.
+                if (firstName && !resultText.includes(firstName) && !celebrityInfo?.isCelebrity) {
+                    console.log(`❌ Name mismatch! Guest first name "${firstName}" not found in result - REJECTING match`);
                     return null;
                 }
 
@@ -2622,10 +2631,10 @@ Return JSON:
             'albert heijn', 'jumbo supermarkten', 'lidl', 'aldi', 'ikea', 'mediamarkt', 'coolblue',
             'ns', 'prorail', 'schiphol', 'klm', 'transavia', 'brussels airlines', 'lufthansa'
         ];
-        const companyLower = targetCompany?.toLowerCase().trim();
-        const isWellKnown = wellKnownCompanies.some(c =>
+        const companyLower = targetCompany ? targetCompany.toLowerCase().trim() : null;
+        const isWellKnown = companyLower ? wellKnownCompanies.some(c =>
             companyLower === c || companyLower.startsWith(c + ' ') || companyLower.startsWith(c + ',')
-        );
+        ) : false;
 
         if (targetCompany && !celebrityInfo.isCelebrity && !isInvalidCompany && !isWellKnown) {
             console.log(`🏢 Parallel: Starting company lookup for ${targetCompany}`);
