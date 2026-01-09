@@ -118,7 +118,7 @@ router.get('/', (req, res) => {
 // GET /api/guests/:id - Get single guest with full details
 router.get('/:id', (req, res) => {
     try {
-        const { id } = req.params;
+        const id = parseInt(req.params.id);
 
         const guest = db.prepare(`
       SELECT * FROM guests WHERE id = ?

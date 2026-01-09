@@ -32,7 +32,7 @@ function updateGuestFromResearch(guestId, searchResults) {
 // POST /api/research/:guestId - Start research for a single guest
 router.post('/:guestId', async (req, res) => {
     try {
-        const { guestId } = req.params;
+        const guestId = parseInt(req.params.guestId);
         const { forceRefresh = false } = req.body;
 
         // Get guest
