@@ -11,15 +11,17 @@ function updateGuestFromResearch(guestId, searchResults) {
     try {
         console.log(`📝 Updating guest ${guestId} with research results: Job="${searchResults.jobTitle}", Company="${searchResults.companyName}"`);
 
-        // Only update company and country - job_title is stored in research_results, not guests table
+        // Update company, country, AND job_title in the main guests table
         db.prepare(`
             UPDATE guests 
             SET company = COALESCE(NULLIF(?, ''), company),
-                country = COALESCE(NULLIF(?, ''), country)
+                country = COALESCE(NULLIF(?, ''), country),
+                job_title = COALESCE(NULLIF(?, ''), job_title)
             WHERE id = ?
         `).run(
             searchResults.companyName,
             searchResults.effectiveCountry || searchResults.socialMediaLocation || searchResults.instagramLocation || searchResults.twitterLocation,
+            searchResults.jobTitle,
             guestId
         );
     } catch (err) {

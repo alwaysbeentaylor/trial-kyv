@@ -21,6 +21,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT,
     full_name TEXT NOT NULL,
+    job_title TEXT,
     phone TEXT,
     country TEXT,
     company TEXT,
@@ -267,6 +268,13 @@ try {
     console.log('🔄 Adding import_batch_id column to guests...');
     db.prepare("ALTER TABLE guests ADD COLUMN import_batch_id TEXT").run();
     console.log('✅ import_batch_id column added successfully');
+  }
+
+  const hasJobTitle = guestInfo.some(col => col.name === 'job_title');
+  if (!hasJobTitle) {
+    console.log('🔄 Adding job_title column to guests...');
+    db.prepare("ALTER TABLE guests ADD COLUMN job_title TEXT").run();
+    console.log('✅ job_title column added successfully');
   }
 
   // Reservations table migrations
