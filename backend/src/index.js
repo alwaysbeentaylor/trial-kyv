@@ -36,16 +36,17 @@ app.use(cors({
   origin: (origin, callback) => {
     // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.indexOf(origin) === -1) {
-      // Log the rejected origin for debugging
-      console.warn(`⚠️ CORS blocked origin: ${origin}`);
-      console.warn(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+
+    // Check if origin is in allowed list OR if it's a Vercel preview URL
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+      return callback(null, true);
     }
-    return callback(null, true);
+
+    // Log the rejected origin for debugging
+    console.warn(`⚠️ CORS blocked origin: ${origin}`);
+    console.warn(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
   },
   credentials: true
 }));
