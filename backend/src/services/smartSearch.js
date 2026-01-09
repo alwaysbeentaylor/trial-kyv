@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 const companyScraper = require('./companyScraper');
 const knowledgeGraph = require('./knowledgeGraph');
 const googleSearch = require('./googleSearch');
+const perplexitySearch = require('./perplexitySearch');
 const queryGenerator = require('./queryGenerator');
 
 /**
@@ -2023,18 +2024,42 @@ Return JSON:
         let googleFailed = false;
 
         // ============================================
-        // STEP 1: Celebrity Probe (Dedicated Broad Search)
+        // STEP 1: FAST SEARCH with Perplexity (Primary) or Google (Fallback)
         // ============================================
-        console.log(`🔍 Step 1: Probing for Celebrity/Public Figure status...`);
-        const probeQuery = `"${guest.full_name}"`;
-        const probeResults = await googleSearch.search(probeQuery, 8);
+        console.log(`🔍 Step 1: Searching for ${guest.full_name}...`);
 
-        if (probeResults && probeResults.length > 0) {
-            for (const result of probeResults) {
-                if (result.link && !seenUrls.has(result.link)) {
-                    seenUrls.add(result.link);
-                    allResults.push(result);
-                    if (result.link.includes('linkedin.com/in/')) linkedInFound = true;
+        let searchResults = null;
+        let searchSource = 'none';
+
+        // TRY PERPLEXITY FIRST (faster, more reliable)
+        if (perplexitySearch.isAvailable()) {
+            perplexitySearch.initialize();
+            searchResults = await perplexitySearch.searchPerson(guest);
+            if (searchResults && searchResults.results.length > 0) {
+                searchSource = 'perplexity';
+                console.log(`✅ Perplexity: ${searchResults.results.length} results in ${searchResults.duration}s`);
+            }
+        }
+
+        // FALLBACK TO GOOGLE if Perplexity unavailable or failed
+        if (!searchResults || searchResults.results.length === 0) {
+            console.log(`🔄 Falling back to Google SERP...`);
+            const probeQuery = `"${guest.full_name}"`;
+            const probeResults = await googleSearch.search(probeQuery, 10);
+            if (probeResults && probeResults.length > 0) {
+                searchResults = { results: probeResults.map(r => ({ ...r, link: r.link })) };
+                searchSource = 'google';
+            }
+        }
+
+        // Process results
+        if (searchResults && searchResults.results.length > 0) {
+            for (const result of searchResults.results) {
+                const link = result.link || result.url;
+                if (link && !seenUrls.has(link)) {
+                    seenUrls.add(link);
+                    allResults.push({ ...result, link });
+                    if (link.includes('linkedin.com/in/')) linkedInFound = true;
                 }
             }
 
@@ -2049,70 +2074,34 @@ Return JSON:
         }
 
         // ============================================
-        // STEP 2: Building targeted queries (SKIP if already confirmed celebrity)
+        // STEP 2: Additional queries (SKIP if Perplexity already found LinkedIn)
         // ============================================
-        if (!celebrityInfo.isCelebrity) {
-            console.log('🔍 Step 2: Building targeted search queries (Normal person search)...');
-            const priorityQueries = [];
+        // Only run extra queries if:
+        // - Not a celebrity AND
+        // - Perplexity didn't find LinkedIn OR we used Google fallback
+        const needsExtraQueries = !celebrityInfo.isCelebrity &&
+            (searchSource !== 'perplexity' || !linkedInFound);
 
-            // SPEED OPTIMIZATION: Only 2 queries maximum
-            // Query 1: LinkedIn search (most important)
-            priorityQueries.push(`site:linkedin.com/in "${guest.full_name}"`);
+        if (needsExtraQueries && searchSource === 'google') {
+            console.log('🔍 Step 2: Running additional LinkedIn search...');
 
-            // Query 2: Name + Company (if known) - helps find the right person
-            if (effectiveCompany) {
-                priorityQueries.push(`"${guest.full_name}" "${effectiveCompany}"`);
-            } else if (guest.country) {
-                // Only add country if no company known
-                const mainCountryTerm = this.getCountrySearchTerms(guest.country)[0];
-                if (mainCountryTerm) {
-                    priorityQueries.push(`site:linkedin.com/in "${guest.full_name}" ${mainCountryTerm}`);
-                }
-            }
+            const linkedInQuery = `site:linkedin.com/in "${guest.full_name}"`;
+            const linkedInResults = await googleSearch.search(linkedInQuery, 5);
 
-            // Remove duplicates
-            const uniqueQueries = [...new Set(priorityQueries)].filter(q => q.length > 15 && q !== probeQuery);
-
-            console.log(`📝 Using ${uniqueQueries.length} targeted queries`);
-
-            // Execute queries in chunks of 3 for parallel speed but safety
-            const CHUNK_SIZE = 3;
-            for (let i = 0; i < uniqueQueries.length; i += CHUNK_SIZE) {
-                const chunk = uniqueQueries.slice(i, i + CHUNK_SIZE);
-                console.log(`   🔎 Processing batch of ${chunk.length} queries...`);
-
-                const chunkPromises = chunk.map(query => googleSearch.search(query, 5));
-                const chunkResults = await Promise.allSettled(chunkPromises);
-
-                chunkResults.forEach((res, index) => {
-                    const query = chunk[index];
-                    if (res.status === 'fulfilled' && res.value) {
-                        const results = res.value;
-                        console.log(`   📊 Query "${query.substring(0, 30)}..." returned ${results.length} results`);
-
-                        for (const result of results) {
-                            if (result.link && !seenUrls.has(result.link)) {
-                                seenUrls.add(result.link);
-                                allResults.push(result);
-
-                                if (result.link.includes('linkedin.com/in/')) {
-                                    linkedInFound = true;
-                                    console.log(`   ✅ LinkedIn profile found: ${result.link}`);
-                                }
-                            }
+            if (linkedInResults && linkedInResults.length > 0) {
+                for (const result of linkedInResults) {
+                    if (result.link && !seenUrls.has(result.link)) {
+                        seenUrls.add(result.link);
+                        allResults.push(result);
+                        if (result.link.includes('linkedin.com/in/')) {
+                            linkedInFound = true;
+                            console.log(`   ✅ LinkedIn profile found: ${result.link}`);
                         }
-                    } else {
-                        console.error(`   ❌ Query failed: ${query.substring(0, 50)}...`);
-                        if (i + index === 0) googleFailed = true;
                     }
-                });
-
-                // SPEED: Stop immediately if we found a LinkedIn profile with the guest's name
-                if (linkedInFound) {
-                    console.log(`   ✅ LinkedIn found - stopping search early`);
-                    break;
                 }
             }
+        } else if (needsExtraQueries) {
+            console.log('⏭️ Skipping Step 2 - Perplexity already searched');
         }
 
         // Google-only: No Brave fallback - using Google exclusively as requested
