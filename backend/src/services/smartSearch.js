@@ -2047,7 +2047,7 @@ Return JSON:
                     netWorthEstimate: null,
                     followersEstimate: null,
                     vipScore: sonarResult.vipScore,
-                    influenceLevel: sonarResult.vipScore >= 8 ? 'high' : sonarResult.vipScore >= 5 ? 'medium' : 'low',
+                    influenceLevel: sonarResult.vipScore >= 9 ? 'VIP' : sonarResult.vipScore >= 7 ? 'Hoog' : sonarResult.vipScore >= 4 ? 'Gemiddeld' : 'Laag',
                     isCelebrity: sonarResult.isCelebrity,
                     celebrityCategory: sonarResult.celebrityCategory,
                     rawResults: [{ type: 'sonar_analysis', data: sonarResult }],
