@@ -2430,8 +2430,32 @@ Return JSON:
                 }
             }
 
-            // Only process if location matches (or no country specified)
-            if (!locationMismatch) {
+            // COMPANY MISMATCH CHECK: If we know company from email, verify the found profile matches
+            let companyMismatch = false;
+            if (emailDomainInfo && emailDomainInfo.companyName && aiResult.company) {
+                const emailCompanyLower = emailDomainInfo.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const foundCompanyLower = aiResult.company.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                // Check if companies are similar (allowing for variations like "Know Your VIP" vs "KnowYourVIP")
+                const emailCompanyWords = emailDomainInfo.companyName.toLowerCase().split(/\s+/);
+                const foundCompanyWords = aiResult.company.toLowerCase().split(/\s+/);
+
+                // Check for any word overlap or substring match
+                const hasOverlap = emailCompanyWords.some(word =>
+                    word.length > 3 && (foundCompanyLower.includes(word) || emailCompanyLower.includes(foundCompanyWords.find(w => w.length > 3) || ''))
+                );
+
+                const isSubstring = emailCompanyLower.includes(foundCompanyLower) || foundCompanyLower.includes(emailCompanyLower);
+
+                if (!hasOverlap && !isSubstring && emailCompanyLower !== foundCompanyLower) {
+                    console.log(`❌ Match SKIPPED (company mismatch): Email says "${emailDomainInfo.companyName}" but profile shows "${aiResult.company}"`);
+                    console.log(`   📧 Email domain company is trusted as primary source (80%+ accuracy)`);
+                    companyMismatch = true;
+                }
+            }
+
+            // Only process if location AND company match (or no constraints)
+            if (!locationMismatch && !companyMismatch) {
                 console.log(`✨ Match found! ${isLinkedIn ? '(LinkedIn)' : '(Broad Search)'} - Conf: ${Math.round(aiResult.confidence * 100)}%`);
 
                 if (isLinkedIn) {
