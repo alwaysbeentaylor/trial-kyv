@@ -570,10 +570,14 @@ Return JSON:
                     return null;
                 }
 
-                // 2. Check first name (mandatory for non-celebrities, recommended for celebrities)
-                // We allow a bit more flexibility for celebrities (stage names), but for normal guests, the first name must match.
-                if (firstName && !resultText.includes(firstName) && !celebrityInfo?.isCelebrity) {
-                    console.log(`❌ Name mismatch! Guest first name "${firstName}" not found in result - REJECTING match`);
+                // 2. Check first name (mandatory)
+                // We only allow first name mismatch IF celebrityInfo explicitly says this is a known alias
+                const isKnownAlias = celebrityInfo?.isCelebrity &&
+                    (celebrityInfo.aliases?.some(a => a.toLowerCase().includes(firstName)) ||
+                        celebrityInfo.primaryName?.toLowerCase().includes(firstName));
+
+                if (firstName && !resultText.includes(firstName) && !isKnownAlias) {
+                    console.log(`❌ Name mismatch! Guest first name "${firstName}" not found in result and not a documented alias - REJECTING match`);
                     return null;
                 }
 
@@ -1230,10 +1234,18 @@ GUEST INFO:
 - Country hint: ${guest.country || 'Unknown'}
 
 RULES:
-1. If the name is a KNOWN ALIAS or REAL NAME of a celebrity, return isCelebrity: true
-2. Return the PRIMARY/MOST FAMOUS name as "primaryName"
-3. List all known aliases in the "aliases" array
-4. If unsure or the name is too common, return isCelebrity: false
+1. If the name is a KNOWN ALIAS or REAL NAME of a celebrity, return isCelebrity: true.
+2. CRITICAL: If the input name is NOT the same person, return isCelebrity: false.
+   - Example Input: "Sem van Ginkel"
+   - Fact: Marco van Ginkel is famous. Sem is NOT Marco.
+   - Action: RETURN isCelebrity: false.
+   - Example Input: "Sean Carter"
+   - Fact: This IS Jay-Z's real name.
+   - Action: RETURN isCelebrity: true.
+3. If the first name is different and you cannot find a documented alias link, it is a namesake mismatch. Return isCelebrity: false.
+4. Return the PRIMARY/MOST FAMOUS name as "primaryName".
+5. List all known aliases in the "aliases" array.
+6. If unsure or the name is too common (e.g. "John Smith"), return isCelebrity: false.
 
 Return JSON:
 {
