@@ -2231,9 +2231,9 @@ Return JSON:
             }
         }
 
-        // Google-only: No Brave fallback - using Google exclusively as requested
-        if (googleFailed && allResults.length === 0) {
-            console.log('⚠️ Google search failed - no results found. Will continue with empty results.');
+        // Check if we found anything at all
+        if (allResults.length === 0) {
+            console.log('⚠️ Discovery and backup searches failed to find any results.');
         }
 
         // Fallback: if nothing found, try 1-2 generic queries
