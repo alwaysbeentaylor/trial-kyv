@@ -2401,9 +2401,9 @@ Return JSON:
         const hasCompanyFromEmail = Boolean(emailDomainInfo?.companyName);
         let shouldSearchSocials = this.shouldSearchSocialMedia(celebrityInfo, linkedinInfo, { hasCompanyFromEmail });
 
-        // STRICT RULE: If LinkedIn is found, skip social media to reduce noise
-        if (linkedinInfo.bestMatch) {
-            console.log(`📋 LinkedIn found - Skipping social media search to reduce noise.`);
+        // STRICT RULE: If LinkedIn OR any confident match is found, skip social media to reduce noise
+        if (linkedinInfo.bestMatch || fallbackMatch) {
+            console.log(`📋 Profile found - Skipping social media search to reduce noise.`);
             shouldSearchSocials = false;
         }
 
@@ -2536,15 +2536,19 @@ Return JSON:
                 } else {
                     // SPEED: Skip company search for well-known large companies (we already know what they are)
                     const wellKnownCompanies = [
-                        'essent', 'kpn', 'ing', 'rabobank', 'abn amro', 'abn', 'philips', 'shell', 'unilever',
-                        'heineken', 'akzo', 'asml', 'booking.com', 'adyen', 'wolters kluwer', 'randstad',
-                        'proximus', 'belfius', 'bnp paribas', 'kbc', 'dexia', 'telenet', 'orange', 'vodafone',
-                        'deloitte', 'pwc', 'kpmg', 'ey', 'ernst', 'mckinsey', 'bcg', 'accenture', 'capgemini',
-                        'microsoft', 'google', 'amazon', 'apple', 'facebook', 'meta', 'ibm', 'oracle', 'sap',
-                        'albert heijn', 'jumbo', 'lidl', 'aldi', 'action', 'ikea', 'mediamarkt', 'coolblue',
+                        'essent', 'kpn', 'ing bank', 'rabobank', 'abn amro', 'philips', 'shell', 'unilever',
+                        'heineken', 'akzonobel', 'asml', 'booking.com', 'adyen', 'wolters kluwer', 'randstad',
+                        'proximus', 'belfius', 'bnp paribas', 'kbc bank', 'telenet', 'orange', 'vodafone',
+                        'deloitte', 'pwc', 'kpmg', 'ernst & young', 'mckinsey', 'boston consulting', 'accenture', 'capgemini',
+                        'microsoft', 'google', 'amazon', 'apple', 'meta platforms', 'ibm', 'oracle', 'sap',
+                        'albert heijn', 'jumbo supermarkten', 'lidl', 'aldi', 'ikea', 'mediamarkt', 'coolblue',
                         'ns', 'prorail', 'schiphol', 'klm', 'transavia', 'brussels airlines', 'lufthansa'
                     ];
-                    const isWellKnown = wellKnownCompanies.some(c => targetCompany?.toLowerCase().includes(c));
+                    // EXACT match check (company name must equal or start with the known company)
+                    const companyLower = targetCompany?.toLowerCase().trim();
+                    const isWellKnown = wellKnownCompanies.some(c =>
+                        companyLower === c || companyLower.startsWith(c + ' ') || companyLower.startsWith(c + ',')
+                    );
 
                     if (isWellKnown) {
                         console.log(`⚡ Skipping company lookup for well-known company: ${targetCompany}`);
