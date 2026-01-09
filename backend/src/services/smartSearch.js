@@ -2303,24 +2303,48 @@ Return JSON:
         // ============================================
         // STEP 5: Find Best LinkedIn Match
         // ============================================
-        // Prepare candidates for AI matching (LinkedIn + Broad/Social/Wikipedia)
-        const aiCandidates = allResults.filter(r => {
-            const link = r.link.toLowerCase();
-            const title = (r.title || '').toLowerCase();
-            const nameParts = guest.full_name.toLowerCase().split(' ');
-            const matchesName = nameParts.some(part => part.length > 3 && title.includes(part));
+        // FAST PATH: If we have a LinkedIn with exact name match in title, skip AI
+        const guestNameLower = guest.full_name.toLowerCase();
+        const perfectLinkedIn = platforms.linkedin.find(r => {
+            const titleLower = (r.title || '').toLowerCase();
+            return titleLower.includes(guestNameLower) && r.link.includes('linkedin.com/in/');
+        });
 
-            return link.includes('linkedin.com/in') ||
-                link.includes('wikipedia.org') ||
-                link.includes('imdb.com') ||
-                link.includes('instagram.com/') ||
-                link.includes('x.com/') ||
-                link.includes('twitter.com/') ||
-                matchesName;
-        }).slice(0, 15);
+        let aiResult = null;
 
-        console.log(`🤖 AI Matching: Analyzing ${aiCandidates.length} potential matches (LinkedIn and Broad search)...`);
-        const aiResult = await this.selectBestMatchWithAI(guest, aiCandidates, celebrityInfo);
+        if (perfectLinkedIn) {
+            // FAST PATH: Skip AI, use title parsing directly
+            console.log(`⚡ Fast match: LinkedIn title contains "${guest.full_name}" - skipping AI`);
+            const parsed = this.parseLinkedInTitle(perfectLinkedIn.title, guest.full_name);
+            aiResult = {
+                url: perfectLinkedIn.link,
+                title: perfectLinkedIn.title,
+                snippet: perfectLinkedIn.snippet,
+                confidence: 0.95,
+                extractedJobTitle: parsed?.jobTitle,
+                extractedCompany: parsed?.company,
+                location: null
+            };
+        } else {
+            // Prepare candidates for AI matching (LinkedIn + Broad/Social/Wikipedia)
+            const aiCandidates = allResults.filter(r => {
+                const link = r.link.toLowerCase();
+                const title = (r.title || '').toLowerCase();
+                const nameParts = guest.full_name.toLowerCase().split(' ');
+                const matchesName = nameParts.some(part => part.length > 3 && title.includes(part));
+
+                return link.includes('linkedin.com/in') ||
+                    link.includes('wikipedia.org') ||
+                    link.includes('imdb.com') ||
+                    link.includes('instagram.com/') ||
+                    link.includes('x.com/') ||
+                    link.includes('twitter.com/') ||
+                    matchesName;
+            }).slice(0, 15);
+
+            console.log(`🤖 AI Matching: Analyzing ${aiCandidates.length} potential matches (LinkedIn and Broad search)...`);
+            aiResult = await this.selectBestMatchWithAI(guest, aiCandidates, celebrityInfo);
+        }
 
         if (aiResult && aiResult.confidence >= 0.6) {
             const isLinkedIn = aiResult.url?.includes('linkedin.com/in/');
