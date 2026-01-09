@@ -2162,11 +2162,21 @@ Return JSON:
 
             // AI Celebrity Detection on early results
             const aiDetection = await this.detectCelebrityWithAI(guest, allResults);
-            // Require 0.9+ confidence to skip LinkedIn search (very conservative)
+            // Require 0.9+ confidence AND a name match in results to skip LinkedIn search
             if (aiDetection && aiDetection.isCelebrity && aiDetection.confidence >= 0.9) {
-                celebrityInfo = aiDetection;
-                console.log(`🌟 Confirmed Public Figure. Skipping deep person-search to avoid namesake mismatches.`);
-                // BRANCH: Skip to Extraction Step
+                // Check if the primary name or aliases are actually present in our search results snippets
+                const primaryNameLower = aiDetection.primaryName?.toLowerCase();
+                const someResultsMatch = allResults.some(r =>
+                    (r.title + ' ' + (r.snippet || '')).toLowerCase().includes(primaryNameLower) ||
+                    (r.title + ' ' + (r.snippet || '')).toLowerCase().includes(guest.full_name.toLowerCase())
+                );
+
+                if (someResultsMatch) {
+                    celebrityInfo = aiDetection;
+                    console.log(`🌟 Confirmed Public Figure FOUND in results. Skipping deep person-search to avoid namesake mismatches.`);
+                } else {
+                    console.log(`⚠️ AI thinks it's a celebrity (${aiDetection.primaryName}), but no matching results found. Continuing deep search.`);
+                }
             }
         }
 
@@ -2696,11 +2706,18 @@ Return JSON:
         // Prioritize job title and company from social media if LinkedIn not available
         // AI analysis is now a high-priority source for professional context
         // BUT: If email domain indicates "Possible owner", use that as job title if no other job title found
+
+        // ONLY use celebrity info if we actually confirmed them in the search results
+        const celebrityMatched = celebrityInfo.isCelebrity &&
+            (allResults.some(r => r.link?.includes('wikipedia.org') || r.link?.includes('imdb.com')) ||
+                linkedinInfo.bestMatch?.url?.includes('linkedin.com/in/') ||
+                fallbackMatch?.url);
+
         let effectiveJobTitle = bestMatch?.jobTitle ||
             fallbackMatch?.jobTitle ||
             twitterResult.jobTitle ||
             instagramResult.jobTitle ||
-            celebrityInfo.knownFor ||
+            (celebrityMatched ? celebrityInfo.knownFor : null) ||
             null;
 
         // If no job title found, but email domain indicates possible owner, use "Mogelijke eigenaar"
