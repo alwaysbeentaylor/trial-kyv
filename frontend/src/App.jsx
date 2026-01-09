@@ -26,10 +26,12 @@ function App() {
     }
   };
 
+  const [showHelp, setShowHelp] = useState(false);
+
   return (
     <Router>
       <div className="min-h-screen bg-[var(--color-bg-secondary)]">
-        <WelcomeModal />
+        <WelcomeModal forceOpen={showHelp} onClose={() => setShowHelp(false)} />
         {/* Header */}
         <header className="bg-white border-b border-[var(--color-border)]">
           <div className="max-w-7xl mx-auto px-6 py-4">
@@ -51,6 +53,18 @@ function App() {
                   <span className="text-[var(--color-accent-gold)]">★</span>
                   <span className="font-semibold">{stats.vipGuests} VIPs</span>
                 </div>
+                {/* Help Button */}
+                <button
+                  onClick={() => setShowHelp(true)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold transition-all hover:scale-110 hover:shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #c9a227, #f4d03f)',
+                    boxShadow: '0 2px 8px rgba(201, 162, 39, 0.4)'
+                  }}
+                  title="Help & Handleiding"
+                >
+                  ?
+                </button>
               </div>
             </div>
           </div>
