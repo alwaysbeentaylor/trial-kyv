@@ -2150,34 +2150,52 @@ Return JSON:
         }
 
         // ============================================
-        // STEP 2: Additional queries (SKIP if Perplexity already found LinkedIn)
+        // STEP 2: GOOGLE BACKUP - Always run if no LinkedIn found
+        // This catches people Perplexity might miss
         // ============================================
-        // Only run extra queries if:
-        // - Not a celebrity AND
-        // - Perplexity didn't find LinkedIn OR we used Google fallback
-        const needsExtraQueries = !celebrityInfo.isCelebrity &&
-            (searchSource !== 'perplexity' || !linkedInFound);
+        if (!linkedInFound && !celebrityInfo.isCelebrity) {
+            console.log('🔍 Step 2: Running Google SERP backup (Perplexity might have missed results)...');
 
-        if (needsExtraQueries && searchSource === 'google') {
-            console.log('🔍 Step 2: Running additional LinkedIn search...');
+            // Query 1: Exact name like Google does
+            const exactNameQuery = `"${guest.full_name}"`;
+            const googleResults = await googleSearch.search(exactNameQuery, 10);
 
-            const linkedInQuery = `site:linkedin.com/in "${guest.full_name}"`;
-            const linkedInResults = await googleSearch.search(linkedInQuery, 5);
-
-            if (linkedInResults && linkedInResults.length > 0) {
-                for (const result of linkedInResults) {
+            if (googleResults && googleResults.length > 0) {
+                let newResultsCount = 0;
+                for (const result of googleResults) {
                     if (result.link && !seenUrls.has(result.link)) {
                         seenUrls.add(result.link);
                         allResults.push(result);
+                        newResultsCount++;
                         if (result.link.includes('linkedin.com/in/')) {
                             linkedInFound = true;
-                            console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                            console.log(`   ✅ LinkedIn found via Google: ${result.link}`);
+                        }
+                    }
+                }
+                if (newResultsCount > 0) {
+                    console.log(`   📊 Google added ${newResultsCount} new results`);
+                }
+            }
+
+            // Query 2: LinkedIn specific if still not found
+            if (!linkedInFound) {
+                const linkedInQuery = `site:linkedin.com/in "${guest.full_name}"`;
+                const linkedInResults = await googleSearch.search(linkedInQuery, 5);
+
+                if (linkedInResults && linkedInResults.length > 0) {
+                    for (const result of linkedInResults) {
+                        if (result.link && !seenUrls.has(result.link)) {
+                            seenUrls.add(result.link);
+                            allResults.push(result);
+                            if (result.link.includes('linkedin.com/in/')) {
+                                linkedInFound = true;
+                                console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                            }
                         }
                     }
                 }
             }
-        } else if (needsExtraQueries) {
-            console.log('⏭️ Skipping Step 2 - Perplexity already searched');
         }
 
         // Google-only: No Brave fallback - using Google exclusively as requested

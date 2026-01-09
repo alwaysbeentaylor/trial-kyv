@@ -133,22 +133,24 @@ class PerplexitySearchService {
 
         const { full_name, country, company } = guest;
 
-        // Build optimized queries (max 5)
+        // Build optimized queries (max 5) - LIKE GOOGLE DOES
         const queries = [];
 
-        // Query 1: LinkedIn search (most important)
+        // Query 1: EXACT NAME SEARCH (most important - just like Google!)
+        // This finds anyone with this exact name, regardless of platform
+        queries.push(`"${full_name}"`);
+
+        // Query 2: LinkedIn search (professional source)
         queries.push(`"${full_name}" site:linkedin.com`);
 
-        // Query 2: General professional search
-        if (company) {
-            queries.push(`"${full_name}" "${company}"`);
-        } else if (country) {
-            queries.push(`"${full_name}" ${country} professional`);
+        // Query 3: Name + Country (helps narrow down for common names)
+        if (country) {
+            queries.push(`"${full_name}" ${country}`);
         }
 
-        // Query 3: Social media (if not too many queries)
-        if (queries.length < 3) {
-            queries.push(`"${full_name}" site:instagram.com OR site:twitter.com`);
+        // Query 4: Name + Company if known
+        if (company) {
+            queries.push(`"${full_name}" "${company}"`);
         }
 
         console.log(`🔮 Perplexity: Searching for ${full_name} (${queries.length} queries)`);
