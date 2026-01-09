@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AddGuestForm from '../components/guests/AddGuestForm';
 import { apiFetch, apiPostFile } from '../utils/api';
 
 function Import({ onUpdate }) {
+    const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [importing, setImporting] = useState(false);
     const [previewing, setPreviewing] = useState(false);
@@ -134,10 +136,14 @@ function Import({ onUpdate }) {
             if (onUpdate) onUpdate();
             loadBatches();
 
-            // Start enrichment if enabled and there are new guests
             if (autoEnrich && data.newGuestIds && data.newGuestIds.length > 0) {
-                startEnrichment(data.newGuestIds, data.batchId);
+                await startEnrichment(data.newGuestIds, data.batchId);
             }
+
+            // Redirect to guests page after successful import
+            setTimeout(() => {
+                navigate('/guests');
+            }, 500);
         } catch (err) {
             setError(err.message || 'Import mislukt');
         } finally {
@@ -546,109 +552,7 @@ function Import({ onUpdate }) {
                 </div>
             )}
 
-            {/* Enrichment Progress Bar */}
-            {enrichmentProgress && (enrichmentProgress.status === 'running' || enrichmentProgress.status === 'paused' || enrichmentProgress.status === 'stopped' || (enrichmentProgress.status === 'completed' && enrichmentProgress.progress === 100)) && (
-                <div className={`card overflow-hidden border-2 transition-colors ${enrichmentProgress.status === 'stopped' ? 'border-red-200' : 'border-purple-200'}`}>
-                    <div className={`p-4 border-b border-[var(--color-border)] ${enrichmentProgress.status === 'stopped' ? 'bg-red-50' : 'bg-purple-50'}`}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="text-2xl animate-pulse">
-                                    {enrichmentProgress.status === 'completed' ? '✅' : enrichmentProgress.status === 'stopped' ? '⏹️' : '🔍'}
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className={`font-semibold flex items-center gap-2 ${enrichmentProgress.status === 'stopped' ? 'text-red-800' : 'text-purple-800'}`}>
-                                        {enrichmentProgress.status === 'completed'
-                                            ? 'Onderzoek Voltooid!'
-                                            : enrichmentProgress.status === 'paused'
-                                                ? 'Onderzoek Gepauzeerd'
-                                                : enrichmentProgress.status === 'stopped'
-                                                    ? 'Onderzoek Gestopt'
-                                                    : 'Onderzoek Bezig...'}
-                                        {enrichmentProgress.status === 'paused' && <span className="text-[10px] px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full animate-pulse">GEPAUZEERD</span>}
-                                        {enrichmentProgress.status === 'stopped' && <span className="text-[10px] px-2 py-0.5 bg-red-200 text-red-700 rounded-full">GESTOP T</span>}
-                                    </h4>
-                                    <p className={`text-sm ${enrichmentProgress.status === 'stopped' ? 'text-red-600' : 'text-purple-600'}`}>
-                                        {enrichmentProgress.status === 'stopped'
-                                            ? `Proces beëindigd op ${enrichmentProgress.completed} gasten`
-                                            : enrichmentProgress.currentName
-                                                ? `Onderzoeken: ${enrichmentProgress.currentName}`
-                                                : `${enrichmentProgress.completed} van ${enrichmentProgress.total} gasten verrijkt`}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                {enrichmentProgress.status === 'running' && (
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={handlePauseQueue}
-                                            className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
-                                            title="Pauzeren"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
-                                        </button>
-                                        <button
-                                            onClick={handleSkipGuest}
-                                            className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
-                                            title="Huidige gast overslaan"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></svg>
-                                        </button>
-                                        <button
-                                            onClick={handleStopQueue}
-                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Stoppen"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
-                                        </button>
-                                    </div>
-                                )}
-                                {(enrichmentProgress.status === 'paused' || enrichmentProgress.status === 'stopped') && (
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={handleResumeQueue}
-                                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                            title="Hervatten"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                                        </button>
-                                        {enrichmentProgress.status === 'paused' && (
-                                            <button
-                                                onClick={handleStopQueue}
-                                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Stoppen"
-                                            >
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                                <div className="text-2xl font-bold text-purple-700">
-                                    {enrichmentProgress.progress}%
-                                </div>
-                                <button
-                                    onClick={() => setEnrichmentProgress(null)}
-                                    className="text-purple-400 hover:text-purple-600"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="h-3 bg-purple-100">
-                        <div
-                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-                            style={{ width: `${enrichmentProgress.progress}%` }}
-                        />
-                    </div>
-                    {enrichmentProgress.errors && enrichmentProgress.errors.length > 0 && (
-                        <div className="p-3 text-sm text-red-600 bg-red-50 border-t border-red-100 italic">
-                            ⚠️ {enrichmentProgress.errors.length} gasten overgeslagen door onderzoeksfouten.
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Results */}
+            {/* Format Help */}
             {result && (
                 <div className="card">
                     <div className="p-6 border-b border-[var(--color-border)] bg-green-50">

@@ -312,21 +312,21 @@ function Guests({ onUpdate }) {
             return 'bezig';
         }
 
-        // Geen actieve queue? Geen queue-status
-        if (!enrichmentProgress || (enrichmentProgress.status !== 'running' && enrichmentProgress.status !== 'paused')) {
-            return null;
-        }
+        // Check active queue data
+        if (enrichmentProgress) {
+            // Is it currently being researched?
+            const isProcessing = enrichmentProgress.current === guest.id ||
+                enrichmentProgress.currentProcessing?.some(p => p.guestId === guest.id);
+            if (isProcessing) return 'bezig';
 
-        // Bezig: zit in currentProcessing OF is current
-        if (enrichmentProgress.currentProcessing?.some(p => p.guestId === guest.id) ||
-            enrichmentProgress.current === guest.id) {
-            return 'bezig';
-        }
-
-        // Wachtrij: zit in guestIds maar nog niet verwerkt (index >= nextIndex)
-        const guestIndex = enrichmentProgress.guestIds?.indexOf(guest.id);
-        if (guestIndex !== undefined && guestIndex >= 0 && guestIndex >= (enrichmentProgress.nextIndex || 0)) {
-            return 'wachtrij';
+            // Is it in the queue for later?
+            const isInQueue = enrichmentProgress.guestIds?.includes(guest.id);
+            if (isInQueue) {
+                const guestIndex = enrichmentProgress.guestIds.indexOf(guest.id);
+                if (guestIndex >= (enrichmentProgress.nextIndex || 0)) {
+                    return 'wachtrij';
+                }
+            }
         }
 
         return null;
@@ -440,7 +440,7 @@ function Guests({ onUpdate }) {
                                                 ? 'Onderzoek Gepauzeerd'
                                                 : enrichmentProgress.status === 'stopped'
                                                     ? 'Onderzoek Gestopt'
-                                                    : 'Onderzoek Bezig...'}
+                                                    : <span className="flex items-center gap-1"><span className="animate-spin text-xs">⟳</span>Bezig</span>}
                                         {enrichmentProgress.status === 'paused' && <span className="text-[10px] px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full animate-pulse">GEPAUZEERD</span>}
                                         {enrichmentProgress.status === 'stopped' && <span className="text-[10px] px-2 py-0.5 bg-red-200 text-red-700 rounded-full">GESTOP T</span>}
                                     </h4>
@@ -784,27 +784,28 @@ function Guests({ onUpdate }) {
                                                 <div className="flex gap-2">
                                                     {(() => {
                                                         const status = getGuestStatus(guest);
-                                                        
+
                                                         if (status === 'bezig') {
                                                             return (
                                                                 <div className="flex items-center gap-2 px-3 py-1 bg-purple-50 rounded-lg border border-purple-100">
+                                                                    <span className="animate-spin text-purple-600">⟳</span>
                                                                     <span className="text-[10px] font-medium text-purple-600 uppercase tracking-tight">
-                                                                        <TypingAnimation text="Bezig..." />
+                                                                        Bezig
                                                                     </span>
                                                                 </div>
                                                             );
                                                         }
-                                                        
+
                                                         if (status === 'wachtrij') {
                                                             return (
-                                                                <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100">
-                                                                    <span className="text-[10px] font-medium text-amber-600 uppercase tracking-tight">
-                                                                        <TypingAnimation text="Wachtrij..." />
+                                                                <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg border border-gray-100">
+                                                                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-tight">
+                                                                        Bezig
                                                                     </span>
                                                                 </div>
                                                             );
                                                         }
-                                                        
+
                                                         if (status === 'onderzocht') {
                                                             return (
                                                                 <button
@@ -815,7 +816,7 @@ function Guests({ onUpdate }) {
                                                                 </button>
                                                             );
                                                         }
-                                                        
+
                                                         // Niet onderzocht - toon onderzoek knop
                                                         return (
                                                             <button

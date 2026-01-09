@@ -4,6 +4,7 @@ import { apiFetch } from './utils/api';
 import Dashboard from './pages/Dashboard';
 import Import from './pages/Import';
 import Guests from './pages/Guests';
+import WelcomeModal from './components/ui/WelcomeModal';
 
 function App() {
   const [stats, setStats] = useState({
@@ -28,6 +29,7 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-[var(--color-bg-secondary)]">
+        <WelcomeModal />
         {/* Header */}
         <header className="bg-white border-b border-[var(--color-border)]">
           <div className="max-w-7xl mx-auto px-6 py-4">

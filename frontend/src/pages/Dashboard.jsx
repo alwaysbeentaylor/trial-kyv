@@ -183,7 +183,7 @@ function Dashboard({ onUpdate }) {
                                                 ? 'Onderzoek Gepauzeerd'
                                                 : enrichmentProgress.status === 'stopped'
                                                     ? 'Onderzoek Gestopt'
-                                                    : 'Onderzoek Bezig...'}
+                                                    : <span className="flex items-center gap-1"><span className="animate-spin text-xs">⟳</span>Bezig</span>}
                                         {enrichmentProgress.status === 'paused' && <span className="text-[10px] px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full animate-pulse">GEPAUZEERD</span>}
                                         {enrichmentProgress.status === 'stopped' && <span className="text-[10px] px-2 py-0.5 bg-red-200 text-red-700 rounded-full">GESTOP T</span>}
                                     </h4>
@@ -290,9 +290,9 @@ function Dashboard({ onUpdate }) {
                                         <div className="flex items-center gap-2">
                                             {guest.full_name}
                                             {enrichmentProgress?.current === guest.id && (
-                                                <span className="inline-flex items-center text-[10px] text-purple-600 font-normal bg-purple-50 px-2 py-0.5 rounded-full animate-pulse">
-                                                    <span className="animate-spin mr-1">🔄</span>
-                                                    Onderzoeken...
+                                                <span className="inline-flex items-center text-[10px] text-purple-600 font-normal bg-purple-50 px-2 py-0.5 rounded-full">
+                                                    <span className="animate-spin mr-1">⟳</span>
+                                                    Bezig
                                                 </span>
                                             )}
                                         </div>
@@ -354,30 +354,11 @@ function Dashboard({ onUpdate }) {
                     </p>
                 </a>
                 <div
-                    onClick={() => handleDownloadDailyReport()}
-                    className="card p-6 hover:border-[var(--color-accent-gold)] transition-colors cursor-pointer group"
-                >
-                    <div className="flex justify-between items-start">
-                        <div className="text-2xl mb-3">📄</div>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="text-xs border rounded px-1 py-0.5"
-                        />
-                    </div>
-                    <h4 className="font-semibold mb-2">Dagrapport</h4>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                        Download PDF van aankomsten op deze datum
-                    </p>
-                </div>
-                <div
                     onClick={() => handleDownloadDailyReport('all')}
-                    className="card p-6 hover:border-[var(--color-accent-gold)] transition-colors cursor-pointer group"
+                    className="card p-6 hover:border-[var(--color-accent-gold)] transition-colors cursor-pointer group col-span-1 md:col-span-2 lg:col-span-2 flex flex-col items-center justify-center text-center py-10"
                 >
-                    <div className="text-2xl mb-3">📚</div>
-                    <h4 className="font-semibold mb-2">Alle Gasten</h4>
+                    <div className="text-4xl mb-4">📚</div>
+                    <h4 className="font-semibold text-xl mb-2">Download Rapport</h4>
                     <p className="text-sm text-[var(--color-text-secondary)]">
                         Download PDF van alle onderzochte gasten
                     </p>
