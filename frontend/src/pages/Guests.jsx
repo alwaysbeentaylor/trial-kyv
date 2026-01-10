@@ -3,8 +3,11 @@ import GuestModal from '../components/guests/GuestModal';
 import AddGuestForm from '../components/guests/AddGuestForm';
 import TypingAnimation from '../components/ui/TypingAnimation';
 import { apiFetch } from '../utils/api';
+import { useLanguage } from '../contexts/LanguageContext';
+
 
 function Guests({ onUpdate }) {
+    const { t } = useLanguage();
     const [guests, setGuests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -609,7 +612,7 @@ function Guests({ onUpdate }) {
             <div className="card overflow-hidden">
                 {loading ? (
                     <div className="p-12 text-center text-[var(--color-text-secondary)]">
-                        Laden...
+                        {t('Laden...')}
                     </div>
                 ) : guests.length > 0 ? (
                     <div className="overflow-x-auto">
@@ -624,13 +627,13 @@ function Guests({ onUpdate }) {
                                             className="rounded border-[var(--color-border)] text-[var(--color-accent-gold)] focus:ring-[var(--color-accent-gold)]"
                                         />
                                     </th>
-                                    <th>Naam</th>
-                                    <th>Functie</th>
-                                    <th>Bedrijf</th>
-                                    <th>Land</th>
-                                    <th>Net Worth</th>
-                                    <th>VIP Score</th>
-                                    <th>Acties</th>
+                                    <th>{t('Naam')}</th>
+                                    <th>{t('Functie')}</th>
+                                    <th>{t('Bedrijf')}</th>
+                                    <th>{t('Land')}</th>
+                                    <th>{t('Net Worth')}</th>
+                                    <th>{t('VIP Score')}</th>
+                                    <th>{t('Acties')}</th>
                                 </tr>
                             </thead>
                             <tbody>

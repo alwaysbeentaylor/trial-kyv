@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../../utils/api';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
+    const { t } = useLanguage();
     const [vipScore, setVipScore] = useState(guest.research?.vip_score || 5);
     const [isEditing, setIsEditing] = useState(false);
     const [editData, setEditData] = useState({
@@ -818,7 +820,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                 <div className="flex items-start gap-3">
                                                     <span className="text-2xl">📋</span>
                                                     <div className="flex-1">
-                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">Samenvatting</h4>
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">{t('Samenvatting')}</h4>
                                                         <p className="text-sm leading-relaxed text-gray-700">
                                                             {/* Clean up citation marks from AI output */}
                                                             {fullReport.executive_summary.replace(/\[\d+\]/g, '').replace(/\s+/g, ' ').trim()}
@@ -832,25 +834,25 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                             {fullReport.professional_background?.current_role && (
                                                 <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                                                    <span className="text-[10px] uppercase font-bold text-blue-600 block mb-1">Rol</span>
+                                                    <span className="text-[10px] uppercase font-bold text-blue-600 block mb-1">{t('Rol')}</span>
                                                     <p className="text-sm font-medium text-gray-800 line-clamp-2">{fullReport.professional_background.current_role}</p>
                                                 </div>
                                             )}
                                             {fullReport.company_analysis?.company_name && (
                                                 <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                                                    <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Bedrijf</span>
+                                                    <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">{t('Bedrijf')}</span>
                                                     <p className="text-sm font-medium text-gray-800 line-clamp-2">{fullReport.company_analysis.company_name}</p>
                                                 </div>
                                             )}
                                             {fullReport.professional_background?.industry_expertise && (
                                                 <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
-                                                    <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">Sector</span>
+                                                    <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">{t('Sector')}</span>
                                                     <p className="text-sm font-medium text-gray-800 line-clamp-2">{fullReport.professional_background.industry_expertise}</p>
                                                 </div>
                                             )}
                                             {research.vip_score && (
                                                 <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                                                    <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">VIP Score</span>
+                                                    <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">{t('VIP Score')}</span>
                                                     <p className="text-xl font-bold text-amber-700">{research.vip_score}/10</p>
                                                 </div>
                                             )}
@@ -864,7 +866,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                     <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors list-none">
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-lg">👤</span>
-                                                            <span className="text-sm font-semibold text-gray-800">Professionele Details</span>
+                                                            <span className="text-sm font-semibold text-gray-800">{t('Professionele Details')}</span>
                                                         </div>
                                                         <span className="transform group-open:rotate-180 transition-transform text-gray-400">▼</span>
                                                     </summary>

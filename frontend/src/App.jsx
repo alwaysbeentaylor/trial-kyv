@@ -5,8 +5,11 @@ import Dashboard from './pages/Dashboard';
 import Import from './pages/Import';
 import Guests from './pages/Guests';
 import WelcomeModal from './components/ui/WelcomeModal';
+import LanguageSwitcher from './components/ui/LanguageSwitcher';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 
-function App() {
+function AppContent() {
+  const { t } = useLanguage();
   const [stats, setStats] = useState({
     totalGuests: 0,
     vipGuests: 0,
@@ -38,21 +41,23 @@ function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="font-heading text-2xl font-semibold tracking-tight">
-                  VIP Guest Research
+                  {t('VIP Guest Research')}
                 </h1>
                 <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                  Gastonderzoek & Rapportage Tool
+                  {t('Gastonderzoek & Rapportage Tool')}
                 </p>
               </div>
               <div className="flex items-center gap-6 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-[var(--color-text-secondary)]">Gasten:</span>
+                  <span className="text-[var(--color-text-secondary)]">{t('Gasten:')}</span>
                   <span className="font-semibold">{stats.totalGuests}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--color-accent-gold)]">★</span>
-                  <span className="font-semibold">{stats.vipGuests} VIPs</span>
+                  <span className="font-semibold">{stats.vipGuests} {t('VIPs')}</span>
                 </div>
+                {/* Language Switcher */}
+                <LanguageSwitcher />
                 {/* Help Button */}
                 <button
                   onClick={() => setShowHelp(true)}
@@ -61,7 +66,7 @@ function App() {
                     background: 'linear-gradient(135deg, #c9a227, #f4d03f)',
                     boxShadow: '0 2px 8px rgba(201, 162, 39, 0.4)'
                   }}
-                  title="Help & Handleiding"
+                  title={t('Help & Handleiding')}
                 >
                   ?
                 </button>
@@ -76,19 +81,19 @@ function App() {
               end
               className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}
             >
-              Dashboard
+              {t('Dashboard')}
             </NavLink>
             <NavLink
               to="/import"
               className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}
             >
-              Importeren
+              {t('Importeren')}
             </NavLink>
             <NavLink
               to="/guests"
               className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}
             >
-              Gasten
+              {t('Gasten')}
             </NavLink>
           </nav>
         </header>
@@ -103,6 +108,14 @@ function App() {
         </main>
       </div>
     </Router>
+  );
+}
+
+function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }
 
