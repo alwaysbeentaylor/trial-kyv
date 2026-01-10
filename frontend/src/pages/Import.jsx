@@ -624,19 +624,18 @@ function Import({ onUpdate }) {
 
             {/* Format Help */}
             <div className="card p-6">
-                <h4 className="font-semibold mb-4">Ondersteunde Formaten</h4>
+                <h4 className="font-semibold mb-4">{t('Ondersteunde Formaten')}</h4>
                 <div className="grid grid-cols-2 gap-6">
                     <div>
-                        <h5 className="font-medium text-sm mb-2">📊 Excel (Mews Export)</h5>
+                        <h5 className="font-medium text-sm mb-2">📊 {t('Excel (Mews Export)')}</h5>
                         <p className="text-sm text-[var(--color-text-secondary)]">
-                            Reserveringsrapporten uit Mews worden automatisch herkend.
-                            Kolommen: Voornaam, Achternaam, E-mail, Telefoon, Nationaliteit, Ruimtecategorie, etc.
+                            {t('Reserveringsrapporten worden automatisch herkend.')}
                         </p>
                     </div>
                     <div>
                         <h5 className="font-medium text-sm mb-2">📄 CSV</h5>
                         <p className="text-sm text-[var(--color-text-secondary)]">
-                            Kolommen: guest_name, email, phone, country, company, room_number, check_in, check_out
+                            {t('Kolommen: guest_name, email, phone, country, company')}
                         </p>
                     </div>
                 </div>

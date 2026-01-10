@@ -861,8 +861,8 @@ function Guests({ onUpdate }) {
                     <div className="p-12 text-center">
                         <p className="text-[var(--color-text-secondary)]">
                             {search || filter !== 'all'
-                                ? 'Geen gasten gevonden met deze filters'
-                                : 'Nog geen gasten geregistreerd'}
+                                ? t('Geen gasten gevonden met deze filters')
+                                : t('Nog geen gasten geregistreerd')}
                         </p>
                     </div>
                 )}

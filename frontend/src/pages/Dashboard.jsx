@@ -143,7 +143,7 @@ function Dashboard({ onUpdate }) {
             <div>
                 <h2 className="font-heading text-3xl font-semibold">Dashboard</h2>
                 <p className="text-[var(--color-text-secondary)] mt-2">
-                    Overzicht van VIP gastonderzoek en statistieken
+                    {t('Overzicht van VIP gastonderzoek en statistieken')}
                 </p>
             </div>
 

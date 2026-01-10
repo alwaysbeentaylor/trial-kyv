@@ -357,6 +357,25 @@ const translations = {
         'View VIP scores and download reports as PDF.': 'Bekijk VIP scores en download rapporten als PDF.',
         'Aan de slag': 'Aan de slag',
         'Get started': 'Aan de slag',
+
+        // Dashboard subtitle
+        'Overzicht van VIP gastonderzoek en statistieken': 'Overzicht van VIP gastonderzoek en statistieken',
+        'Overview of VIP guest research and statistics': 'Overzicht van VIP gastonderzoek en statistieken',
+
+        // Import format help
+        'Ondersteunde Formaten': 'Ondersteunde Formaten',
+        'Supported Formats': 'Ondersteunde Formaten',
+        'Excel (Mews Export)': 'Excel (Mews Export)',
+        'Reserveringsrapporten worden automatisch herkend.': 'Reserveringsrapporten worden automatisch herkend.',
+        'Reservation reports are automatically recognized.': 'Reserveringsrapporten worden automatisch herkend.',
+        'Kolommen: guest_name, email, phone, country, company': 'Kolommen: guest_name, email, phone, country, company',
+        'Columns: guest_name, email, phone, country, company': 'Kolommen: guest_name, email, phone, country, company',
+
+        // Guests empty state
+        'Geen gasten gevonden met deze filters': 'Geen gasten gevonden met deze filters',
+        'No guests found with these filters': 'Geen gasten gevonden met deze filters',
+        'Nog geen gasten geregistreerd': 'Nog geen gasten geregistreerd',
+        'No guests registered yet': 'Nog geen gasten geregistreerd',
     },
 
     en: {
@@ -703,6 +722,25 @@ const translations = {
         'View VIP scores and download reports as PDF.': 'View VIP scores and download reports as PDF.',
         'Aan de slag': 'Get started',
         'Get started': 'Get started',
+
+        // Dashboard subtitle
+        'Overzicht van VIP gastonderzoek en statistieken': 'Overview of VIP guest research and statistics',
+        'Overview of VIP guest research and statistics': 'Overview of VIP guest research and statistics',
+
+        // Import format help
+        'Ondersteunde Formaten': 'Supported Formats',
+        'Supported Formats': 'Supported Formats',
+        'Excel (Mews Export)': 'Excel (Mews Export)',
+        'Reserveringsrapporten worden automatisch herkend.': 'Reservation reports are automatically recognized.',
+        'Reservation reports are automatically recognized.': 'Reservation reports are automatically recognized.',
+        'Kolommen: guest_name, email, phone, country, company': 'Columns: guest_name, email, phone, country, company',
+        'Columns: guest_name, email, phone, country, company': 'Columns: guest_name, email, phone, country, company',
+
+        // Guests empty state
+        'Geen gasten gevonden met deze filters': 'No guests found with these filters',
+        'No guests found with these filters': 'No guests found with these filters',
+        'Nog geen gasten geregistreerd': 'No guests registered yet',
+        'No guests registered yet': 'No guests registered yet',
     }
 };
 
