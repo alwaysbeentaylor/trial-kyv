@@ -436,26 +436,26 @@ function Import({ onUpdate }) {
                     <div className="p-6 grid grid-cols-4 gap-4">
                         <div className="text-center">
                             <div className="text-3xl font-bold">{preview.totalRows}</div>
-                            <div className="text-sm text-[var(--color-text-secondary)]">Totaal</div>
+                            <div className="text-sm text-[var(--color-text-secondary)]">{t('Totaal')}</div>
                         </div>
                         <div className="text-center">
                             <div className="text-3xl font-bold text-green-600">{preview.newGuests}</div>
-                            <div className="text-sm text-[var(--color-text-secondary)]">Nieuwe gasten</div>
+                            <div className="text-sm text-[var(--color-text-secondary)]">{t('Nieuwe gasten')}</div>
                         </div>
                         <div className="text-center">
                             <div className="text-3xl font-bold text-blue-600">{preview.existingGuests}</div>
-                            <div className="text-sm text-[var(--color-text-secondary)]">Bestaande gasten</div>
+                            <div className="text-sm text-[var(--color-text-secondary)]">{t('Bestaande gasten')}</div>
                         </div>
                         <div className="text-center">
                             <div className="text-3xl font-bold text-orange-600">{preview.skipped}</div>
-                            <div className="text-sm text-[var(--color-text-secondary)]">Overgeslagen</div>
+                            <div className="text-sm text-[var(--color-text-secondary)]">{t('Overgeslagen')}</div>
                         </div>
                     </div>
 
                     {preview.warnings && preview.warnings.length > 0 && (
                         <div className="px-6 pb-4">
                             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                                <strong>Waarschuwingen:</strong>
+                                <strong>{t('Waarschuwingen')}:</strong>
                                 <ul className="mt-1 list-disc list-inside">
                                     {preview.warnings.map((w, i) => <li key={i}>{w}</li>)}
                                 </ul>
@@ -465,7 +465,7 @@ function Import({ onUpdate }) {
 
                     {preview.sampleGuests && preview.sampleGuests.length > 0 && (
                         <div className="px-6 pb-4">
-                            <h4 className="font-semibold mb-2">Selecteer gasten om te importeren:</h4>
+                            <h4 className="font-semibold mb-2">{t('Selecteer gasten om te importeren')}:</h4>
                             <div className="max-h-96 overflow-y-auto border rounded-lg">
                                 <table className="table text-sm">
                                     <thead className="sticky top-0 bg-white shadow-sm">
@@ -478,12 +478,12 @@ function Import({ onUpdate }) {
                                                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                 />
                                             </th>
-                                            <th>Naam</th>
-                                            <th>Email</th>
-                                            <th>Land</th>
-                                            <th>Kamer</th>
-                                            <th>Bedrag</th>
-                                            <th>Status</th>
+                                            <th>{t('Naam')}</th>
+                                            <th>{t('Email')}</th>
+                                            <th>{t('Land')}</th>
+                                            <th>{t('Kamer')}</th>
+                                            <th>{t('Bedrag')}</th>
+                                            <th>{t('Status')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -508,9 +508,9 @@ function Import({ onUpdate }) {
                                                 <td>{guest.totalAmount ? `€${guest.totalAmount.toFixed(2)}` : '-'}</td>
                                                 <td>
                                                     {guest.isNew ? (
-                                                        <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Nieuw</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">{t('Nieuw')}</span>
                                                     ) : (
-                                                        <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">Update</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">{t('Update')}</span>
                                                     )}
                                                 </td>
                                             </tr>
@@ -519,7 +519,7 @@ function Import({ onUpdate }) {
                                 </table>
                             </div>
                             <div className="mt-2 text-xs text-gray-500 italic">
-                                {selectedIndices.length} van de {preview.sampleGuests.length} gasten geselecteerd voor import.
+                                {selectedIndices.length} {t('van de')} {preview.sampleGuests.length} {t('gasten geselecteerd voor import')}.
                             </div>
                         </div>
                     )}
@@ -532,7 +532,7 @@ function Import({ onUpdate }) {
                                 onChange={(e) => setAutoEnrich(e.target.checked)}
                                 className="w-4 h-4"
                             />
-                            <span className="text-sm">🔍 Automatisch onderzoek starten voor nieuwe gasten</span>
+                            <span className="text-sm">🔍 {t('Automatisch onderzoek starten voor nieuwe gasten')}</span>
                         </label>
 
                         <div className="flex gap-3">
@@ -540,14 +540,14 @@ function Import({ onUpdate }) {
                                 onClick={() => { setPreview(null); setFile(null); }}
                                 className="btn btn-secondary"
                             >
-                                Annuleren
+                                {t('Annuleren')}
                             </button>
                             <button
                                 onClick={handleImport}
                                 disabled={importing || selectedIndices.length === 0}
                                 className="btn btn-primary px-8"
                             >
-                                {importing ? 'Importeren...' : `✓ ${selectedIndices.length} Gasten Importeren`}
+                                {importing ? t('Importeren...') : `✓ ${selectedIndices.length} ${t('Gasten Importeren')}`}
                             </button>
                         </div>
                     </div>
