@@ -215,9 +215,10 @@ class PerplexitySearchService {
      * Replaces: Search + Celebrity Detection + AI Matching + VIP Analysis
      * 
      * @param {Object} guest - Guest object with full_name, country, company, email
+     * @param {Object} options - Options including language preference
      * @returns {Promise<Object>} Complete analysis including VIP score, job, company, etc.
      */
-    async analyzeWithSonar(guest) {
+    async analyzeWithSonar(guest, options = {}) {
         if (!this.apiKey) {
             console.warn('⚠️ Perplexity API key not configured');
             return null;
@@ -225,8 +226,14 @@ class PerplexitySearchService {
 
         const startTime = Date.now();
         const { full_name, country, company, email } = guest;
+        const language = options.language || 'nl';
 
-        console.log(`🔮 Sonar: Analyzing ${full_name}...`);
+        // Determine output language instructions
+        const langInstructions = language === 'en'
+            ? 'IMPORTANT: Write ALL text fields in ENGLISH. This includes jobTitle, company, knownFor, vipReason, notableInfo, companyDescription, etc.'
+            : 'IMPORTANT: Write ALL text fields in DUTCH (Nederlands). This includes jobTitle, company, knownFor, vipReason, notableInfo, companyDescription, etc.';
+
+        console.log(`🔮 Sonar: Analyzing ${full_name} (output: ${language})...`);
 
         // Extract email domain for company research (if valid)
         let emailDomain = null;
@@ -260,6 +267,8 @@ class PerplexitySearchService {
 
         const prompt = `Act as a professional concierge analyst for a luxury hotel. Write in a WARM, CONVERSATIONAL style.
 
+${langInstructions}
+
 GUEST: ${full_name}
 LOCATION: ${country || 'Unknown'}${emailContext}${locationContext}
 
@@ -271,6 +280,7 @@ CRITICAL RULES:
 5. Write in flowing, natural sentences
 6. Keep it brief but informative (2-3 sentences max per field)
 7. Use simple, clear language
+8. ${language === 'en' ? 'Write ALL content in ENGLISH' : 'Write ALL content in DUTCH (Nederlands)'}
 
 ${emailDomain ? `COMPANY RESEARCH REQUIRED:
 - Look up the website ${emailDomain} and determine what type of business it is
@@ -284,19 +294,19 @@ Return ONLY this JSON:
   "foundLocation": "Where this person is actually from/based",
   "isCelebrity": boolean,
   "celebrityCategory": "entertainment|sports|business|politics|media|none",
-  "knownFor": "One clear sentence about what they're known for",
-  "jobTitle": "Their current professional title",
-  "company": "Their current organization or 'Independent' if freelance",
-  "companyType": "What type of business (e.g., 'SaaS startup', 'Luxury hotel', 'Marketing agency', 'Restaurant group')",
-  "companyDescription": "One sentence about what the company does",
-  "ownershipLikelihood": "high|medium|low|unknown - likelihood this person owns or leads the company",
+  "knownFor": "${language === 'en' ? 'One clear sentence about what they are known for' : 'Eén duidelijke zin over waarvoor ze bekend staan'}",
+  "jobTitle": "${language === 'en' ? 'Their current professional title' : 'Hun huidige professionele titel'}",
+  "company": "${language === 'en' ? 'Their current organization or Independent if freelance' : 'Hun huidige organisatie of Zelfstandig als freelance'}",
+  "companyType": "${language === 'en' ? 'What type of business (SaaS startup, Luxury hotel, etc.)' : 'Type bedrijf (SaaS startup, Luxe hotel, etc.)'}",
+  "companyDescription": "${language === 'en' ? 'One sentence about what the company does' : 'Eén zin over wat het bedrijf doet'}",
+  "ownershipLikelihood": "high|medium|low|unknown",
   "linkedinUrl": "LinkedIn URL if found",
   "instagramHandle": "handle without @",
   "twitterHandle": "handle without @",
   "location": "city/region",
   "vipScore": 1-10,
-  "vipReason": "One sentence explaining why this score",
-  "notableInfo": "2-3 sentences of key info a hotel should know. Write naturally, no citations.",
+  "vipReason": "${language === 'en' ? 'One sentence explaining why this score' : 'Eén zin die deze score verklaart'}",
+  "notableInfo": "${language === 'en' ? '2-3 sentences of key info a hotel should know. Write naturally, no citations.' : '2-3 zinnen met belangrijke info die een hotel moet weten. Schrijf natuurlijk, geen citaties.'}",
   "confidenceScore": 0.0-1.0,
   "sources": ["url1", "url2"]
 }`;

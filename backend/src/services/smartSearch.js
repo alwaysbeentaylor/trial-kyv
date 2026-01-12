@@ -2026,8 +2026,11 @@ Return JSON:
      * 4. Extract platforms from results
      * 5. AI analyzes ALL data together
      */
-    async searchGuest(guest) {
+    async searchGuest(guest, options = {}) {
+        // Extract language from options (default to 'nl' for Dutch)
+        const language = options.language || 'nl';
         console.log(`\n🚀 ========== FAST FINDER: ${guest.full_name} ==========`);
+        console.log(`🌐 Output language: ${language}`);
         const startTime = Date.now();
 
         // ============================================
@@ -2037,7 +2040,7 @@ Return JSON:
             perplexitySearch.initialize();
 
             console.log('🔮 Using Sonar (all-in-one search + analysis)...');
-            const sonarResult = await perplexitySearch.analyzeWithSonar(guest);
+            const sonarResult = await perplexitySearch.analyzeWithSonar(guest, { language });
 
             if (sonarResult) {
                 const duration = ((Date.now() - startTime) / 1000).toFixed(1);

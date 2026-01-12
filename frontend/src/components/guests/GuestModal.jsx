@@ -406,7 +406,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                 value={editData.profile_photo_url}
                                 onChange={(e) => setEditData({ ...editData, profile_photo_url: e.target.value })}
                                 className="input"
-                                placeholder="Plak hier een directe link naar een afbeelding..."
+                                placeholder={t('Plak hier een directe link naar een afbeelding...')}
                             />
                             <p className="text-[10px] text-gray-500 mt-1">
                                 Tip: Rechtermuisknop op een LinkedIn foto &gt; "Afbeeldingadres kopiëren"
@@ -445,7 +445,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                 <div className="space-y-1">
                                     <p className="font-bold text-base leading-tight">{t('Geen openbare informatie gevonden')}</p>
                                     <p className="text-sm opacity-90 leading-relaxed">
-                                        Onze onderzoeker kon geen betrouwbare publieke profielen, nieuwsberichten of bedrijfsgegevens vinden voor deze gast.
+                                        {t('Onze onderzoeker kon geen betrouwbare publieke profielen, nieuwsberichten of bedrijfsgegevens vinden voor deze gast.')}
                                         Dit kan betekenen dat de gast een zeer beperkte online aanwezigheid heeft of dat de gegevens afgeschermd zijn.
                                     </p>
                                 </div>
@@ -589,7 +589,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                         {/* Sources List */}
                         {showSources && usableSourcesCount > 0 && (
                             <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg animate-in fade-in slide-in-from-top-2 duration-200">
-                                <h5 className="font-semibold text-xs text-uppercase text-gray-500 mb-3 tracking-wide">Geraadpleegde Bronnen</h5>
+                                <h5 className="font-semibold text-xs text-uppercase text-gray-500 mb-3 tracking-wide">{t('Geraadpleegde Bronnen')}</h5>
                                 <div className="flex flex-wrap gap-2">
                                     {rawResults.map((result, idx) => {
                                         const data = result.data;
@@ -685,7 +685,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     <div className="flex items-center gap-2">
                                         <span className="text-lg">{research.needs_linkedin_review === 1 ? '⚠️' : '📋'}</span>
                                         <h5 className={`font-semibold text-sm ${research.needs_linkedin_review === 1 ? 'text-yellow-800' : 'text-gray-800'}`}>
-                                            {research.needs_linkedin_review === 1 ? 'LinkedIn Review Nodig' : 'Beschikbare LinkedIn Profielen'}
+                                            {research.needs_linkedin_review === 1 ? t('LinkedIn Review Nodig') : t('Beschikbare LinkedIn Profielen')}
                                         </h5>
                                     </div>
                                     <button
@@ -695,7 +695,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                             : 'bg-[var(--color-accent-gold)] border-[var(--color-accent-gold)] text-white hover:opacity-90'
                                             }`}
                                     >
-                                        {showCandidates ? 'Verbergen' : 'Bekijk Opties'}
+                                        {showCandidates ? t('Verbergen') : t('Bekijk Opties')}
                                     </button>
                                 </div>
 
@@ -703,8 +703,8 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
                                         <p className={`text-xs mb-4 ${research.needs_linkedin_review === 1 ? 'text-yellow-700' : 'text-gray-600'}`}>
                                             {research.needs_linkedin_review === 1
-                                                ? 'We hebben meerdere profielen gevonden. Kies de juiste persoon:'
-                                                : 'Bekijk andere profielen die we hebben gevonden voor deze gast:'}
+                                                ? t('We hebben meerdere profielen gevonden. Kies de juiste persoon:')
+                                                : t('Bekijk andere profielen die we hebben gevonden voor deze gast:')}
                                         </p>
                                         <div className="space-y-3">
                                             {(() => {
@@ -747,27 +747,27 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                                             ? 'bg-green-100 text-green-800 border-green-200 cursor-default'
                                                                             : 'bg-white text-green-600 border-green-600 hover:bg-green-50'}`}
                                                                     >
-                                                                        {candidate.url === research.linkedin_url ? 'Geselecteerd' : 'Selecteer deze persoon'}
+                                                                        {candidate.url === research.linkedin_url ? t('Geselecteerd') : t('Selecteer deze persoon')}
                                                                     </button>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     ));
                                                 } catch (e) {
-                                                    return <p className="text-xs text-red-500">Fout bij laden kandidaten</p>;
+                                                    return <p className="text-xs text-red-500">{t('Fout bij laden kandidaten')}</p>;
                                                 }
                                             })()}
                                             <button
                                                 onClick={handleResearch}
                                                 className="text-[10px] text-gray-500 hover:text-gray-700 italic underline mt-2 block w-full text-center"
                                             >
-                                                Niemand klopt? Probeer onderzoek opnieuw met aangepaste gegevens.
+                                                {t('Niemand klopt? Probeer onderzoek opnieuw met aangepaste gegevens.')}
                                             </button>
                                             <button
                                                 onClick={handleManualGoogleSearch}
                                                 className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold mt-2 block w-full text-center hover:underline"
                                             >
-                                                Of zoek handmatig op Google voor meer resultaten
+                                                {t('Of zoek handmatig op Google voor meer resultaten')}
                                             </button>
                                         </div>
                                     </div>
@@ -786,7 +786,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                         <line x1="16" y1="16" x2="16" y2="16"></line>
                                     </svg>
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] text-[var(--color-text-secondary)] uppercase font-semibold">Industrie / Sector</span>
+                                        <span className="text-[10px] text-[var(--color-text-secondary)] uppercase font-semibold">{t('Industrie / Sector')}</span>
                                         <span className="text-sm font-medium">{research.industry}</span>
                                     </div>
                                 </div>
@@ -806,7 +806,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                 if (!fullReport) return research.notable_info && (
                                     <div className="mt-4 p-4 bg-[var(--color-bg-secondary)] rounded-lg border-l-4 border-[var(--color-accent-gold)]">
                                         <span className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wide block mb-2">
-                                            Opmerkelijke Info
+                                            {t('Opmerkelijke Info')}
                                         </span>
                                         <p className="text-sm">{research.notable_info}</p>
                                     </div>
@@ -873,13 +873,13 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                     <div className="px-4 pb-4 pt-0 border-t border-gray-100 space-y-3">
                                                         {fullReport.professional_background?.career_trajectory && (
                                                             <div>
-                                                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">📈 Carrière</span>
+                                                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">📈 {t('Carrière')}</span>
                                                                 <p className="text-sm text-gray-700">{fullReport.professional_background.career_trajectory.replace(/\[\d+\]/g, '')}</p>
                                                             </div>
                                                         )}
                                                         {fullReport.professional_background?.notable_achievements && (
                                                             <div>
-                                                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">🏆 Prestaties</span>
+                                                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">🏆 {t('Prestaties')}</span>
                                                                 <p className="text-sm text-gray-700">{fullReport.professional_background.notable_achievements.replace(/\[\d+\]/g, '')}</p>
                                                             </div>
                                                         )}
@@ -1037,19 +1037,19 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                             {fullReport.service_recommendations?.special_attention && (
                                                                 <div className="bg-gray-50 rounded-lg p-3">
-                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">Focus</span>
+                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">{t('Focus')}</span>
                                                                     <p className="text-sm text-gray-700 mt-1">{fullReport.service_recommendations.special_attention}</p>
                                                                 </div>
                                                             )}
                                                             {fullReport.service_recommendations?.communication_style && (
                                                                 <div className="bg-gray-50 rounded-lg p-3">
-                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">Communicatie</span>
+                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">{t('Communicatie')}</span>
                                                                     <p className="text-sm text-gray-700 mt-1">{fullReport.service_recommendations.communication_style}</p>
                                                                 </div>
                                                             )}
                                                             {fullReport.service_recommendations?.gift_suggestions && (
                                                                 <div className="bg-gray-50 rounded-lg p-3">
-                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">Cadeau Tip</span>
+                                                                    <span className="text-[10px] uppercase font-bold text-gray-500">{t('Cadeau Tip')}</span>
                                                                     <p className="text-sm text-gray-700 mt-1">{fullReport.service_recommendations.gift_suggestions}</p>
                                                                 </div>
                                                             )}
@@ -1080,7 +1080,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                         <div className="flex items-center gap-2">
                             <span className="text-lg">✨</span>
                             <h4 className="font-semibold text-sm text-[var(--color-text-primary)] uppercase tracking-wide">
-                                Onderzoeks Assistent
+                                {t('Onderzoeks Assistent')}
                             </h4>
                         </div>
                         <span className={`transform transition-transform ${showAiAssistant ? 'rotate-180' : ''}`}>
@@ -1091,14 +1091,14 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                     {showAiAssistant && (
                         <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
                             <p className="text-xs text-[var(--color-text-secondary)]">
-                                Voed de assistent met informatie die je zelf hebt gevonden (links naar artikelen, LinkedIn posts, of je eigen bevindingen) om een scherper rapport te krijgen.
+                                {t('Voed de assistent met informatie die je zelf hebt gevonden om een scherper rapport te krijgen.')}
                             </p>
 
                             <textarea
                                 value={customInput}
                                 onChange={(e) => setCustomInput(e.target.value)}
                                 className="input min-h-[120px] text-sm resize-none"
-                                placeholder="Plak hier je bevindingen om het rapport te verfijnen..."
+                                placeholder={t('Plak hier je bevindingen om het rapport te verfijnen...')}
                                 disabled={isCustomAnalyzing}
                             />
 
@@ -1117,7 +1117,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                         className="btn btn-secondary text-xs py-2 px-4"
                                         title="Vorig rapport herstellen"
                                     >
-                                        ↩️ Ongedaan maken
+                                        ↩️ {t('Ongedaan maken')}
                                     </button>
                                 )}
                                 <button
@@ -1128,16 +1128,16 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     {isCustomAnalyzing ? (
                                         <>
                                             <span className="animate-spin text-sm">🔄</span>
-                                            Bezig met verwerken...
+                                            {t('Bezig met verwerken...')}
                                         </>
                                     ) : (
-                                        <>✨ Analyseer Verder</>
+                                        <>✨ {t('Analyseer Verder')}</>
                                     )}
                                 </button>
                             </div>
 
                             <p className="text-[10px] text-[var(--color-text-secondary)] italic">
-                                Tip: Hoe meer context je geeft, hoe krachtiger het rapport. Het systeem combineert dit met bestaande LinkedIn data.
+                                Tip: {t('Hoe meer context je geeft, hoe krachtiger het rapport.')}
                             </p>
                         </div>
                     )}
@@ -1147,14 +1147,14 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                 {(isEditing || guest.notes) && (
                     <div className="p-6 border-t border-[var(--color-border)]">
                         <span className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wide block mb-2">
-                            Notities
+                            {t('Notities')}
                         </span>
                         {isEditing ? (
                             <textarea
                                 value={editData.notes}
                                 onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
                                 className="input min-h-[80px]"
-                                placeholder="Voeg notities toe..."
+                                placeholder={t('Voeg notities toe...')}
                             />
                         ) : (
                             <p className="text-sm">{guest.notes}</p>
@@ -1172,13 +1172,13 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     disabled={saving}
                                     className="btn btn-primary"
                                 >
-                                    {saving ? 'Opslaan...' : 'Opslaan'}
+                                    {saving ? t('Laden...') : t('Opslaan')}
                                 </button>
                                 <button
                                     onClick={() => setIsEditing(false)}
                                     className="btn btn-secondary"
                                 >
-                                    Annuleren
+                                    {t('Annuleren')}
                                 </button>
                             </>
                         ) : (
@@ -1187,24 +1187,24 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                     onClick={() => setIsEditing(true)}
                                     className="btn btn-secondary"
                                 >
-                                    ✏️ Bewerken
+                                    ✏️ {t('Bewerken')}
                                 </button>
                                 {showDeleteConfirm ? (
                                     <div className="flex gap-2 items-center">
-                                        <span className="text-sm text-red-600">Weet je het zeker?</span>
+                                        <span className="text-sm text-red-600">{t('Weet je het zeker?')}</span>
                                         <button
                                             onClick={handleDelete}
                                             disabled={deleting}
                                             className="btn text-white px-3 py-1 text-sm"
                                             style={{ backgroundColor: '#dc2626' }}
                                         >
-                                            {deleting ? 'Bezig...' : 'Ja, verwijder'}
+                                            {deleting ? t('Bezig') + '...' : t('Ja, verwijder')}
                                         </button>
                                         <button
                                             onClick={() => setShowDeleteConfirm(false)}
                                             className="btn btn-secondary px-3 py-1 text-sm"
                                         >
-                                            Nee
+                                            {t('Nee')}
                                         </button>
                                     </div>
                                 ) : (
@@ -1215,7 +1215,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                                 className="btn btn-secondary text-amber-600 border-amber-200 hover:bg-amber-50"
                                                 title="Onderzoeksresultaten wissen"
                                             >
-                                                🧹 Wissen
+                                                🧹 {t('Wissen')}
                                             </button>
                                         )}
                                         <button
@@ -1223,7 +1223,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                             className="btn btn-secondary"
                                             style={{ color: '#dc2626' }}
                                         >
-                                            🗑️ Verwijderen
+                                            🗑️ {t('Verwijderen')}
                                         </button>
                                     </div>
                                 )}
@@ -1238,7 +1238,7 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                 disabled={researching}
                                 className="btn btn-secondary"
                             >
-                                {researching ? '🔄 Vernieuwen...' : '🔄 Herhaal Onderzoek'}
+                                {researching ? '🔄 ' + t('Vernieuwen...') : '🔄 ' + t('Herhaal Onderzoek')}
                             </button>
                         )}
                         {!research && (
@@ -1247,14 +1247,14 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                                 disabled={researching}
                                 className="btn btn-secondary"
                             >
-                                {researching ? '🔍 Zoeken...' : '🔍 Onderzoek Starten'}
+                                {researching ? '🔍 ' + t('Zoeken...') : '🔍 ' + t('Onderzoek Starten')}
                             </button>
                         )}
                         <button
                             onClick={() => onDownloadPDF(guest.id, guest.full_name)}
                             className="btn btn-primary"
                         >
-                            📄 PDF Downloaden
+                            📄 {t('PDF Downloaden')}
                         </button>
                     </div>
                 </div>

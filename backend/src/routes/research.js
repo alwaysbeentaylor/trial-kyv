@@ -35,6 +35,10 @@ router.post('/:guestId', async (req, res) => {
         const guestId = parseInt(req.params.guestId);
         const { forceRefresh = false } = req.body;
 
+        // Get language preference from Accept-Language header
+        const language = req.headers['accept-language'] || 'nl';
+        console.log(`🌐 Research language preference: ${language}`);
+
         // Get guest
         const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(guestId);
         if (!guest) {
@@ -54,7 +58,7 @@ router.post('/:guestId', async (req, res) => {
         // Perform smart search (Wikipedia + AI) with 60s timeout
         let searchResults;
         try {
-            const researchPromise = smartSearch.searchGuest(guest);
+            const researchPromise = smartSearch.searchGuest(guest, { language });
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Research timeout (180s)')), 180000)
             );

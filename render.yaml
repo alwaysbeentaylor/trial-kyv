@@ -1,19 +1,79 @@
+# Render.com Blueprint Configuration
+# Deploy: Render Dashboard → New → Blueprint → Connect this repo
+
 services:
+  # ==========================================
+  # BACKEND API (Node.js/Express)
+  # ==========================================
   - type: web
-    name: lareserve-backend
-    env: node
+    name: kyv-backend
+    runtime: node
     region: frankfurt
     plan: starter
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    numInstances: 1
+    disk:
+      name: kyv-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
+      # Server Configuration
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
       - key: RENDER
         value: true
-    healthCheckPath: /api/health
-    autoDeploy: true
-    numInstances: 1
+      - key: DATABASE_PATH
+        value: /data/database.sqlite
+      
+      # AI Integration (add your key in Render Dashboard)
+      - key: OPENAI_API_KEY
+        sync: false  # Must be set manually in Render Dashboard
+      
+      # Search APIs (add your keys in Render Dashboard)
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
+      - key: SCRAPER_API_KEY
+        sync: false
+      - key: TWO_CAPTCHA_API_KEY
+        sync: false
+      - key: GOOGLE_KNOWLEDGE_GRAPH_API_KEY
+        sync: false
+      
+      # Google Search Settings
+      - key: GOOGLE_SEARCH_DELAY
+        value: 5000
+      - key: PROXY_URL
+        sync: false
 
+  # ==========================================
+  # FRONTEND (React/Vite Static Site)
+  # ==========================================
+  - type: web
+    name: kyv-frontend
+    runtime: static
+    region: frankfurt
+    plan: starter
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: kyv-backend
+          envVarKey: RENDER_EXTERNAL_URL
