@@ -57,8 +57,6 @@ services:
   - type: web
     name: kyv-frontend
     runtime: static
-    region: frankfurt
-    plan: starter
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
