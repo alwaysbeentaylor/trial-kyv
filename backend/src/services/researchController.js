@@ -3,6 +3,30 @@ const smartSearch = require('./smartSearch');
 const vipScorer = require('./vipScorer');
 
 /**
+ * Normalize influence_level to Dutch values for database constraint
+ * Database expects: 'Laag', 'Gemiddeld', 'Hoog', 'VIP'
+ */
+function normalizeInfluenceLevel(level) {
+    if (!level) return 'Gemiddeld';
+
+    const normalized = level.toLowerCase().trim();
+
+    // Map English to Dutch
+    const mapping = {
+        'low': 'Laag',
+        'medium': 'Gemiddeld',
+        'high': 'Hoog',
+        'vip': 'VIP',
+        // Dutch values pass through
+        'laag': 'Laag',
+        'gemiddeld': 'Gemiddeld',
+        'hoog': 'Hoog'
+    };
+
+    return mapping[normalized] || 'Gemiddeld';
+}
+
+/**
  * Helper to update main guest record with research findings
  */
 function updateGuestFromResearch(guestId, searchResults) {
@@ -66,7 +90,8 @@ async function performResearch(guestId, options = {}) {
 
     // Get VIP score from AI analysis or calculate
     const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-    const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
+    const rawInfluenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
+    const influenceLevel = normalizeInfluenceLevel(rawInfluenceLevel);
 
     // Save or update research results
     if (existingResearch) {
