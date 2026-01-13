@@ -2692,7 +2692,7 @@ Return JSON:
         console.log(`========================================================\n`);
 
         // Pass emailDomainInfo to finalizeResearch so it doesn't run again
-        return this.finalizeResearch(guest, linkedinInfo, celebrityInfo, fallbackMatch, allResults, emailDomainInfo);
+        return this.finalizeResearch(guest, linkedinInfo, celebrityInfo, fallbackMatch, allResults, emailDomainInfo, language);
     }
 
     /**
@@ -2757,7 +2757,7 @@ Return JSON:
     /**
      * Helper to wrap up the research process
      */
-    async finalizeResearch(guest, linkedinInfo, celebrityInfo, fallbackMatch, allResults = [], emailDomainInfoFromSearch = null) {
+    async finalizeResearch(guest, linkedinInfo, celebrityInfo, fallbackMatch, allResults = [], emailDomainInfoFromSearch = null, language = 'nl') {
         // Initialize results with defaults
         let instagramResult = { url: null, handle: null, followers: null };
         let twitterResult = { url: null, handle: null, followers: null };
