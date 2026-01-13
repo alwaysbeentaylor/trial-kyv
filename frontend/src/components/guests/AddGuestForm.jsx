@@ -33,14 +33,6 @@ function AddGuestForm({ onClose, onSuccess }) {
                 body: JSON.stringify(formData)
             });
 
-            // Start research in background (don't wait for completion)
-            // This allows the form to close immediately and show "Bezig..." in the table
-            if (startResearch && data.id) {
-                apiFetch(`/api/research/${data.id}`, {
-                    method: 'POST'
-                }).catch(err => console.error('Auto-research failed:', err));
-            }
-
             // onSuccess already calls setShowAddForm(false) via handleGuestUpdated
             if (onSuccess) onSuccess(data.id, startResearch);
         } catch (err) {

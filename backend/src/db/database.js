@@ -405,6 +405,23 @@ try {
     console.log('✅ company_ownership_label column added successfully');
   }
 
+  // CRITICAL: Clean up duplicate research results to prevent lists from showing double entries
+  console.log('🔄 Cleaning up any duplicate research results...');
+  db.prepare(`
+    DELETE FROM research_results 
+    WHERE id NOT IN (
+      SELECT MAX(id) FROM research_results GROUP BY guest_id
+    )
+  `).run();
+
+  // Ensure unique index on guest_id so it never happens again
+  try {
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_research_guest_id_unique ON research_results(guest_id)").run();
+    console.log('✅ Unique index on research_results(guest_id) ensured');
+  } catch (indexError) {
+    console.warn('⚠️ Could not create unique index on guest_id:', indexError.message);
+  }
+
 } catch (error) {
   console.error('Migration error:', error);
 }
