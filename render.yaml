@@ -51,27 +51,5 @@ services:
       - key: PROXY_URL
         sync: false
 
-# ==========================================
-# FRONTEND (React/Vite Static Site)
-# ==========================================
-staticSites:
-  - name: kyv-trial
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    pullRequestPreviewsEnabled: true
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: SAMEORIGIN
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: kyv-trial-api
-          envVarKey: RENDER_EXTERNAL_URL
+
 
