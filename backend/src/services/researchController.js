@@ -24,7 +24,8 @@ function normalizeInfluenceLevel(level) {
         // Dutch values pass through
         'laag': 'Laag',
         'gemiddeld': 'Gemiddeld',
-        'hoog': 'Hoog'
+        'hoog': 'Hoog',
+        'none': 'Laag'
     };
 
     return mapping[normalized] || 'Gemiddeld';
@@ -246,4 +247,8 @@ async function performResearch(guestId, options = {}) {
     };
 }
 
-module.exports = { performResearch };
+module.exports = {
+    performResearch,
+    updateGuestFromResearch,
+    normalizeInfluenceLevel
+};

@@ -6,16 +6,6 @@ const vipScorer = require('../services/vipScorer');
 const researchController = require('../services/researchController');
 const emailService = require('../services/emailService');
 
-// Helper to normalize influence_level to Dutch values for database constraint
-function normalizeInfluenceLevel(level) {
-    if (!level) return 'Gemiddeld';
-    const normalized = level.toLowerCase().trim();
-    const mapping = {
-        'low': 'Laag', 'medium': 'Gemiddeld', 'high': 'Hoog', 'vip': 'VIP',
-        'laag': 'Laag', 'gemiddeld': 'Gemiddeld', 'hoog': 'Hoog', 'none': 'Laag'
-    };
-    return mapping[normalized] || 'Gemiddeld';
-}
 
 // POST /api/research/:guestId - Start research for a single guest
 // POST /api/research/:guestId - Start research for a single guest
@@ -221,89 +211,21 @@ router.post('/batch', async (req, res) => {
 
         for (const guestId of guestIds) {
             try {
-                const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(guestId);
-                if (!guest) {
-                    results.errors.push({ guestId, error: 'Gast niet gevonden' });
-                    continue;
-                }
+                // Get language preference from Accept-Language header
+                const language = req.headers['accept-language'] || 'nl';
 
-                // Check existing research
-                const existingResearch = db.prepare('SELECT id FROM research_results WHERE guest_id = ?').get(guestId);
-                if (existingResearch && skipExisting) {
+                const researchResult = await researchController.performResearch(guestId, {
+                    forceRefresh: !skipExisting,
+                    language
+                });
+
+                if (researchResult.cached) {
                     results.skipped++;
-                    continue;
-                }
-
-                // Perform smart search
-                const searchResults = await smartSearch.searchGuest(guest);
-                const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-                const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
-
-                // Save results
-                if (existingResearch) {
-                    db.prepare(`
-            UPDATE research_results SET
-              profile_photo_url = ?, job_title = ?, company_name = ?, company_size = ?,
-              industry = ?, linkedin_url = ?, linkedin_connections = ?, 
-              linkedin_candidates = ?, needs_linkedin_review = ?,
-              instagram_handle = ?, instagram_url = ?, instagram_followers = ?,
-              twitter_handle = ?, twitter_url = ?, twitter_followers = ?,
-              website_url = ?, notable_info = ?, full_report = ?, press_mentions = ?,
-              net_worth = ?, followers_estimate = ?,
-              vip_score = ?, influence_level = ?,
-              raw_search_results = ?, 
-              no_results_found = ?,
-              updated_at = CURRENT_TIMESTAMP
-            WHERE guest_id = ?
-          `).run(
-                        searchResults.profilePhotoUrl, searchResults.jobTitle, searchResults.companyName,
-                        searchResults.companySize, searchResults.industry, searchResults.linkedinUrl,
-                        searchResults.linkedinConnections,
-                        JSON.stringify(searchResults.linkedinCandidates || []),
-                        searchResults.needsLinkedInReview ? 1 : 0,
-                        searchResults.instagramHandle, searchResults.instagramUrl, searchResults.instagramFollowers,
-                        searchResults.twitterHandle, searchResults.twitterUrl, searchResults.twitterFollowers,
-                        searchResults.websiteUrl,
-                        searchResults.notableInfo, JSON.stringify(searchResults.fullReport || null),
-                        searchResults.pressMentions, searchResults.netWorthEstimate, searchResults.followersEstimate,
-                        vipScore, influenceLevel,
-                        JSON.stringify(searchResults.rawResults),
-                        searchResults.noResultsFound ? 1 : 0,
-                        guestId
-                    );
                 } else {
-                    db.prepare(`
-            INSERT INTO research_results (
-              guest_id, profile_photo_url, job_title, company_name, company_size,
-              industry, linkedin_url, linkedin_connections, 
-              linkedin_candidates, needs_linkedin_review,
-              instagram_handle, instagram_url, instagram_followers, 
-              twitter_handle, twitter_url, twitter_followers,
-              website_url, notable_info, full_report, press_mentions,
-              net_worth, followers_estimate,
-              vip_score, influence_level, raw_search_results, no_results_found
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-                        guestId, searchResults.profilePhotoUrl, searchResults.jobTitle, searchResults.companyName,
-                        searchResults.companySize, searchResults.industry, searchResults.linkedinUrl,
-                        searchResults.linkedinConnections,
-                        JSON.stringify(searchResults.linkedinCandidates || []),
-                        searchResults.needsLinkedInReview ? 1 : 0,
-                        searchResults.instagramHandle, searchResults.instagramUrl, searchResults.instagramFollowers,
-                        searchResults.twitterHandle, searchResults.twitterUrl, searchResults.twitterFollowers,
-                        searchResults.websiteUrl,
-                        searchResults.notableInfo, JSON.stringify(searchResults.fullReport || null),
-                        searchResults.pressMentions, searchResults.netWorthEstimate, searchResults.followersEstimate,
-                        vipScore, influenceLevel, JSON.stringify(searchResults.rawResults),
-                        searchResults.noResultsFound ? 1 : 0
-                    );
+                    results.completed++;
+                    // Delay between requests (quality over speed)
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }
-
-                results.completed++;
-
-                // Delay between requests (quality over speed)
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
             } catch (guestError) {
                 results.errors.push({ guestId, error: guestError.message });
             }
@@ -609,7 +531,7 @@ async function processEnrichmentQueue(queueId, guestIds, startIndex = 0) {
 
             const searchResults = result;
             const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-            const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
+            const influenceLevel = researchController.normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
 
             // Save results
             db.prepare(`
@@ -639,7 +561,7 @@ async function processEnrichmentQueue(queueId, guestIds, startIndex = 0) {
             );
 
             // UPDATE THE MAIN GUEST RECORD with research findings
-            updateGuestFromResearch(guestId, searchResults);
+            researchController.updateGuestFromResearch(guestId, searchResults);
 
             queue.completed++;
             queue.nextIndex = i + 1;
@@ -763,7 +685,7 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
 
             const searchResults = result;
             const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-            const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
+            const influenceLevel = researchController.normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
 
             // Save results
             db.prepare(`
@@ -792,7 +714,7 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
             );
 
             // UPDATE THE MAIN GUEST RECORD with research findings
-            updateGuestFromResearch(guestId, searchResults);
+            researchController.updateGuestFromResearch(guestId, searchResults);
 
             console.log(`✅ Completed ${guest.full_name} - VIP Score: ${vipScore}`);
             return { guestId, success: true, vipScore };
@@ -1151,6 +1073,12 @@ router.put('/:guestId/select-linkedin', async (req, res) => {
             influenceLevel,
             guestId
         );
+
+        // UPDATE THE MAIN GUEST RECORD with findings
+        researchController.updateGuestFromResearch(guestId, {
+            jobTitle: selectedCandidate.jobTitle || analysis.job_title || research.job_title,
+            companyName: selectedCandidate.company || analysis.company_name || research.company_name
+        });
 
         res.json({
             success: true,

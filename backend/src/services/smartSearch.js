@@ -23,6 +23,10 @@ const IGNORED_EMAIL_DOMAINS = [
     'airbnb.com', 'vrbo.com', 'tripadvisor.com', 'kayak.com', 'priceline.com',
     'travelocity.com', 'orbitz.com', 'hotwire.com', 'lastminute.com',
     'momondo.com', 'skyscanner.com', 'cheaptickets.com',
+    'expediapartnercentral.com', 'm.expediapartnercentral.com',
+    // ISPs & Providers (guests use these for personal mail)
+    'belgacom.net', 'skynet.be', 'proximus.be', 'telenet.be', 'scarlet.be', 'base.be',
+    'online.nl', 'ziggo.nl', 'kpnmail.nl', 'xs4all.nl', 'planet.nl', 'hetnet.nl',
     // Airlines & Transport (guests booked travel, don't work there)
     'transavia.com', 'klm.com', 'klm.nl', 'airfrance.com', 'airfrance.fr',
     'lufthansa.com', 'britishairways.com', 'easyjet.com', 'ryanair.com',
