@@ -23,10 +23,14 @@ const PORT = process.env.PORT || 3001;
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',  // Next.js landing page dev
+  'http://localhost:3001',
   process.env.FRONTEND_URL,
   process.env.LANDING_URL,   // Production landing page URL
-  // Also allow any Render frontend URLs (for production)
-  process.env.RENDER_EXTERNAL_URL ? new URL(process.env.RENDER_EXTERNAL_URL).origin : null
+  // Render.com URLs
+  'https://kyv-trial.onrender.com',
+  'https://kyv-frontend.onrender.com',
+  'https://kyv-backend.onrender.com',
+  'https://kyv-trial-api.onrender.com',
 ].filter(Boolean);
 
 // Log allowed origins for debugging
@@ -37,8 +41,10 @@ app.use(cors({
     // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    // Check if origin is in allowed list OR if it's a Vercel preview URL
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+    // Check if origin is in allowed list, is a Vercel preview URL, OR is a Render URL
+    if (allowedOrigins.indexOf(origin) !== -1 ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com')) {
       return callback(null, true);
     }
 
@@ -48,7 +54,9 @@ app.use(cors({
     const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
     return callback(new Error(msg), false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'X-Requested-With']
 }));
 
 app.use(express.json());
