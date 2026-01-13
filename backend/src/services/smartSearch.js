@@ -399,41 +399,62 @@ Return JSON:
             'verenigd koninkrijk': ['verenigd koninkrijk', 'united kingdom', 'uk', 'england', 'london', 'manchester', 'birmingham', 'glasgow', 'edinburgh'],
             'united kingdom': ['verenigd koninkrijk', 'united kingdom', 'uk', 'england', 'london', 'manchester', 'birmingham', 'glasgow', 'edinburgh'],
             'uk': ['verenigd koninkrijk', 'united kingdom', 'uk', 'england', 'london', 'manchester', 'birmingham', 'glasgow', 'edinburgh'],
+            'verenigde staten': ['verenigde staten', 'united states', 'usa', 'u.s.', 'america', 'new york', 'los angeles', 'chicago', 'california', 'florida', 'texas'],
+            'united states': ['verenigde staten', 'united states', 'usa', 'u.s.', 'america', 'new york', 'los angeles', 'chicago', 'california', 'florida', 'texas'],
+            'usa': ['verenigde staten', 'united states', 'usa', 'u.s.', 'america', 'new york', 'los angeles', 'chicago', 'california', 'florida', 'texas'],
             'spanje': ['spanje', 'spain', 'es', 'madrid', 'barcelona', 'valencia', 'sevilla', 'seville'],
             'spain': ['spanje', 'spain', 'es', 'madrid', 'barcelona', 'valencia', 'sevilla', 'seville'],
             'italië': ['italië', 'italy', 'it', 'rome', 'milaan', 'milan', 'napels', 'naples', 'venetië', 'venice'],
             'italy': ['italië', 'italy', 'it', 'rome', 'milaan', 'milan', 'napels', 'naples', 'venetië', 'venice'],
             'egypte': ['egypte', 'egypt', 'eg', 'cairo', 'alexandria', 'giza'],
             'egypt': ['egypte', 'egypt', 'eg', 'cairo', 'alexandria', 'giza'],
+            'verenigde arabische emiraten': ['vae', 'uae', 'emiraten', 'emirates', 'dubai', 'abu dhabi', 'sharjah'],
+            'united arab emirates': ['vae', 'uae', 'emiraten', 'emirates', 'dubai', 'abu dhabi', 'sharjah'],
+            'uae': ['vae', 'uae', 'emiraten', 'emirates', 'dubai', 'abu dhabi', 'sharjah'],
         };
 
         const normalizedTarget = targetCountry.toLowerCase().trim();
-        const searchTerms = countryMap[normalizedTarget] || [normalizedTarget];
+
+        // Find best match in country map
+        let searchTerms = [normalizedTarget];
+        for (const [key, terms] of Object.entries(countryMap)) {
+            if (normalizedTarget.includes(key) || key.includes(normalizedTarget)) {
+                searchTerms = terms;
+                break;
+            }
+        }
 
         // Get all other countries' terms for conflict detection
         const allOtherTerms = Object.entries(countryMap)
-            .filter(([key]) => !searchTerms.some(st => key.includes(normalizedTarget) || normalizedTarget.includes(key)))
+            .filter(([key]) => !searchTerms.some(st => key.includes(st) || st.includes(key)))
             .flatMap(([, terms]) => terms);
 
         return results.filter(result => {
             const text = `${result.title || ''} ${result.snippet || ''} ${result.link || ''}`.toLowerCase();
 
             // Check if any country indicator is present
-            const hasCountryMatch = searchTerms.some(term => text.includes(term.toLowerCase()));
+            const matchesTargetCountry = searchTerms.some(term => text.includes(term.toLowerCase()));
 
-            // Check for conflicting countries (e.g., result mentions "Cairo" but target is "Nederland")
+            // Check for conflicting countries
             const hasConflictingCountry = allOtherTerms.some(term => {
-                // Only flag if it's a strong indicator (city names, not just common words)
-                const strongIndicators = ['cairo', 'amsterdam', 'london', 'paris', 'berlin', 'madrid', 'rome', 'brussels', 'antwerp', 'rotterdam', 'utrecht', 'alexandria', 'giza'];
-                return strongIndicators.includes(term.toLowerCase()) && text.includes(term.toLowerCase()) && !hasCountryMatch;
+                // Strong indicators are cities and country codes that are unlikely to be false positives
+                const strongIndicators = [
+                    'cairo', 'amsterdam', 'london', 'paris', 'berlin', 'madrid', 'rome', 'brussels', 'antwerp', 'rotterdam',
+                    'dubai', 'abu dhabi', 'new york', 'los angeles', 'california', 'chicago', 'houston',
+                    'alexandria', 'giza', 'uae', 'vae', 'usa'
+                ];
+
+                return strongIndicators.includes(term.toLowerCase()) &&
+                    text.includes(term.toLowerCase()) &&
+                    !matchesTargetCountry;
             });
 
             // If we have a country match, include it
-            if (hasCountryMatch) return true;
+            if (matchesTargetCountry) return true;
 
             // If there's a conflicting country indicator, exclude it
             if (hasConflictingCountry) {
-                console.log(`   🚫 Excluding result (wrong country): ${result.title?.substring(0, 50)}...`);
+                console.log(`   🚫 Excluding result (wrong country): ${result.title?.substring(0, 50)}... (${result.link})`);
                 return false;
             }
 
@@ -2518,7 +2539,10 @@ Return JSON:
         // Location mismatch keywords - if snippet contains these but doesn't match guest country, reject
         const usLocations = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'california', 'texas', 'florida', 'united states', 'usa', 'u.s.', 'america'];
         const ukLocations = ['london', 'manchester', 'birmingham', 'leeds', 'glasgow', 'liverpool', 'edinburgh', 'united kingdom', 'uk', 'britain'];
-        const middleEastLocations = ['dubai', 'abu dhabi', 'uae', 'united arab emirates', 'saudi arabia', 'qatar', 'bahrain', 'kuwait', 'oman'];
+        const uaeLocations = ['dubai', 'abu dhabi', 'uae', 'united arab emirates', 'sharjah', 'ajman'];
+        const gulfLocations = ['saudi arabia', 'qatar', 'bahrain', 'kuwait', 'oman', 'riyadh', 'doha', 'jeddah'];
+        const egyptLocations = ['egypt', 'cairo', 'alexandria', 'giza', 'egyptian'];
+        const middleEastLocations = [...uaeLocations, ...gulfLocations]; // Combine for backward compatibility
 
         const perfectLinkedIn = platforms.linkedin.find(r => {
             const titleLower = (r.title || '').toLowerCase();
@@ -2569,26 +2593,38 @@ Return JSON:
                 const snippetHasUSLocation = usLocations.some(loc => snippetLower.includes(loc));
                 const snippetHasUKLocation = ukLocations.some(loc => snippetLower.includes(loc));
                 const snippetHasMiddleEastLocation = middleEastLocations.some(loc => snippetLower.includes(loc));
+                const snippetHasEgyptLocation = egyptLocations.some(loc => snippetLower.includes(loc));
+                const snippetHasUAELocation = uaeLocations.some(loc => snippetLower.includes(loc));
 
-                if (guestIsUAE && (snippetHasUSLocation || snippetHasUKLocation)) {
-                    console.log(`⚠️ LinkedIn SKIPPED (US/UK snippet for UAE guest): ${r.link}`);
-                    return false;
+                const guestIsEgypt = guestCountryLower.includes('egypt') || guestCountryLower.includes('egypte');
+
+                if (guestIsUAE) {
+                    if (snippetHasUSLocation || snippetHasUKLocation || snippetHasEgyptLocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (US/UK/Egypt snippet for UAE guest): ${r.link}`);
+                        return false;
+                    }
                 }
-                if (guestIsUS && (snippetHasMiddleEastLocation || snippetHasUKLocation)) {
+                else if (guestIsEgypt) {
+                    if (snippetHasUSLocation || snippetHasUKLocation || snippetHasUAELocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (US/UK/UAE snippet for Egypt guest): ${r.link}`);
+                        return false;
+                    }
+                }
+                else if (guestIsUS && (snippetHasMiddleEastLocation || snippetHasUKLocation || snippetHasEgyptLocation)) {
                     console.log(`⚠️ LinkedIn SKIPPED (non-US snippet for US guest): ${r.link}`);
                     return false;
                 }
-                if (guestIsUK && (snippetHasUSLocation || snippetHasMiddleEastLocation)) {
+                else if (guestIsUK && (snippetHasUSLocation || snippetHasMiddleEastLocation || snippetHasEgyptLocation)) {
                     console.log(`⚠️ LinkedIn SKIPPED (non-UK snippet for UK guest): ${r.link}`);
                     return false;
                 }
-                if (guestIsEU && snippetHasUSLocation) {
-                    console.log(`⚠️ LinkedIn SKIPPED (US snippet for EU guest): ${r.link}`);
+                else if (guestIsEU && (snippetHasUSLocation || snippetHasEgyptLocation)) {
+                    console.log(`⚠️ LinkedIn SKIPPED (US/Egypt snippet for EU guest): ${r.link}`);
                     return false;
                 }
                 // Generic check for any other country
-                if (!guestIsUAE && !guestIsUS && !guestIsUK && !guestIsEU) {
-                    if (snippetHasUSLocation) {
+                else {
+                    if (snippetHasUSLocation && !guestCountryLower.includes('state') && !guestCountryLower.includes('usa') && !guestCountryLower.includes('america')) {
                         console.log(`⚠️ LinkedIn SKIPPED (US snippet for ${guest.country} guest): ${r.link}`);
                         return false;
                     }
@@ -2656,6 +2692,7 @@ Return JSON:
                     const guestIsUS = guestCountryLower.includes('united states') || guestCountryLower.includes('usa') || guestCountryLower.includes('america');
                     const guestIsUK = guestCountryLower.includes('kingdom') || guestCountryLower.includes('uk') || guestCountryLower.includes('britain');
                     const guestIsEU = ['netherlands', 'nederland', 'belgium', 'belgië', 'germany', 'deutschland', 'france', 'spain', 'italy'].some(c => guestCountryLower.includes(c));
+                    const guestIsEgypt = guestCountryLower.includes('egypt') || guestCountryLower.includes('egypte');
 
                     // URL-based filtering
                     if (urlCountryCode) {
@@ -2680,13 +2717,22 @@ Return JSON:
                     // Snippet-based filtering (backup)
                     const snippetHasUSLocation = usLocations.some(loc => snippetLower.includes(loc));
                     const snippetHasUKLocation = ukLocations.some(loc => snippetLower.includes(loc));
+                    const snippetHasEgyptLocation = egyptLocations.some(loc => snippetLower.includes(loc));
+                    const snippetHasUAELocation = uaeLocations.some(loc => snippetLower.includes(loc));
+                    const snippetHasMiddleEastLocation = middleEastLocations.some(loc => snippetLower.includes(loc));
 
-                    if (guestIsUAE && (snippetHasUSLocation || snippetHasUKLocation)) {
-                        console.log(`⚠️ AI candidate SKIPPED (US/UK snippet for UAE guest): ${link}`);
-                        return false;
-                    }
-                    if (guestIsEU && snippetHasUSLocation) {
-                        console.log(`⚠️ AI candidate SKIPPED (US snippet for EU guest): ${link}`);
+                    if (guestIsUAE) {
+                        if (snippetHasUSLocation || snippetHasUKLocation || snippetHasEgyptLocation) {
+                            console.log(`⚠️ AI candidate SKIPPED (US/UK/Egypt snippet for UAE guest): ${link}`);
+                            return false;
+                        }
+                    } else if (guestIsEgypt) {
+                        if (snippetHasUSLocation || snippetHasUKLocation || snippetHasUAELocation || snippetHasMiddleEastLocation) {
+                            console.log(`⚠️ AI candidate SKIPPED (US/UK/Gulf snippet for Egypt guest): ${link}`);
+                            return false;
+                        }
+                    } else if (guestIsEU && (snippetHasUSLocation || snippetHasEgyptLocation)) {
+                        console.log(`⚠️ AI candidate SKIPPED (US/Egypt snippet for EU guest): ${link}`);
                         return false;
                     }
                 }
@@ -2929,7 +2975,21 @@ Return JSON:
 
         // TRY TO REUSE PROBE DATA FIRST (no new searches if found)
         if (allResults.length > 0) {
-            const profiles = this.extractPlatformProfiles(allResults);
+            let profiles = this.extractPlatformProfiles(allResults);
+
+            // Filter all platform profiles by country if specified
+            if (guest.country) {
+                Object.keys(profiles).forEach(platform => {
+                    if (Array.isArray(profiles[platform]) && profiles[platform].length > 0 && platform !== 'websites' && platform !== 'news') {
+                        const before = profiles[platform].length;
+                        profiles[platform] = this.filterResultsByCountry(profiles[platform], guest.country);
+                        const after = profiles[platform].length;
+                        if (before !== after) {
+                            console.log(`   🌍 Filtered ${platform} results by country (${guest.country}): ${before} → ${after}`);
+                        }
+                    }
+                });
+            }
 
             // STRICT: Only reuse if URL actually contains instagram.com
             if (profiles.instagram.length > 0 && profiles.instagram[0].link?.includes('instagram.com')) {

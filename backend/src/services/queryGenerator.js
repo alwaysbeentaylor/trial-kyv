@@ -36,13 +36,24 @@ class QueryGenerator {
         try {
             console.log(`🤖 Generating AI-powered search queries for ${guest.full_name}...`);
 
+            // Extract company from email domain for better AI context
+            let emailCompany = '';
+            if (guest.email && guest.email.includes('@')) {
+                const domain = guest.email.split('@')[1]?.toLowerCase() || '';
+                const ignoredDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'];
+                if (domain && !ignoredDomains.some(d => domain.includes(d))) {
+                    emailCompany = domain.split('.')[0].replace(/[^a-z0-9]/g, ' ').trim();
+                }
+            }
+
             const prompt = `Generate comprehensive search queries to find EVERYTHING about this person online.
 
 GUEST INFO:
 - Name: ${guest.full_name}
-- Company: ${guest.company || 'Unknown'}
+- Company: ${guest.company || 'Unknown'} (Hint: possibly related to "${emailCompany}")
 - Country: ${guest.country || 'Unknown'}
 - City: ${guest.city || 'Unknown'}
+- Email: ${guest.email || 'None'}
 
 YOUR MISSION: Generate 15-20 strategic search queries that will find:
 1. LinkedIn profile
@@ -120,6 +131,37 @@ Return JSON array of strings:
         const nameNoSpaces = name.toLowerCase().replace(/\s+/g, '');
 
         // ============================================
+        // EMAIL DOMAIN EXTRACTION (NEW!)
+        // Extract company name from email domain
+        // e.g., 1@marriott.com -> "marriott"
+        // ============================================
+        let emailCompany = '';
+        if (guest.email && guest.email.includes('@')) {
+            const domain = guest.email.split('@')[1]?.toLowerCase() || '';
+            // List of domains to ignore (personal email providers, booking platforms)
+            const ignoredDomains = [
+                'gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+                'icloud.com', 'live.com', 'msn.com', 'aol.com', 'protonmail.com',
+                'mail.com', 'me.com', 'gmx.com', 'yandex.com', 'zoho.com',
+                'booking.com', 'expedia.com', 'hotels.com', 'airbnb.com', 'agoda.com',
+                'tripadvisor.com', 'kayak.com', 'trivago.com'
+            ];
+
+            if (domain && !ignoredDomains.includes(domain)) {
+                // Extract company name from domain (remove TLD)
+                emailCompany = domain.split('.')[0]
+                    .replace(/-/g, ' ')  // hotel-xyz -> hotel xyz
+                    .replace(/_/g, ' ')  // hotel_xyz -> hotel xyz
+                    .trim();
+
+                // Only use if it's a reasonable company name (not too short)
+                if (emailCompany.length < 3) {
+                    emailCompany = '';
+                }
+            }
+        }
+
+        // ============================================
         // TIER 1: CORE IDENTITY QUERIES (High Priority)
         // ============================================
         queries.push(`"${name}" ${country}`.trim());
@@ -128,6 +170,14 @@ Return JSON array of strings:
         if (company) {
             queries.push(`"${name}" "${company}"`);
             queries.push(`"${name}" "${company}" ${country}`.trim());
+        }
+
+        // NEW: Email domain company queries
+        if (emailCompany && emailCompany !== company.toLowerCase()) {
+            console.log(`📧 Adding email domain company to search: "${emailCompany}" (from ${guest.email})`);
+            queries.push(`"${name}" "${emailCompany}"`);
+            queries.push(`"${name}" "${emailCompany}" ${country}`.trim());
+            queries.push(`site:linkedin.com/in "${name}" "${emailCompany}"`);
         }
 
         // ============================================
