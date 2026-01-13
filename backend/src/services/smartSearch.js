@@ -2350,6 +2350,16 @@ Return JSON:
         const seenUrls = new Set();
         let linkedInFound = false;
 
+        // Constants for location filtering (moved up to avoid ReferenceError)
+        const guestNameLower = guest.full_name.toLowerCase();
+        const guestCountryLower = (guest.country || '').toLowerCase();
+        const usLocations = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'california', 'texas', 'florida', 'united states', 'usa', 'u.s.', 'america'];
+        const ukLocations = ['london', 'manchester', 'birmingham', 'leeds', 'glasgow', 'liverpool', 'edinburgh', 'united kingdom', 'uk', 'britain'];
+        const uaeLocations = ['dubai', 'abu dhabi', 'uae', 'united arab emirates', 'sharjah', 'ajman'];
+        const gulfLocations = ['saudi arabia', 'qatar', 'bahrain', 'kuwait', 'oman', 'riyadh', 'doha', 'jeddah'];
+        const egyptLocations = ['egypt', 'cairo', 'alexandria', 'giza', 'egyptian'];
+        const middleEastLocations = [...uaeLocations, ...gulfLocations];
+
         // --- STEP 1: PARALLEL DISCOVERY ---
         // Run Perplexity Search AND an initial Google probe Query simultaneously
         // This saves ~8-12s in the traditional flow
@@ -2534,16 +2544,6 @@ Return JSON:
         // ============================================
         // FAST PATH: If we have a LinkedIn with exact name match in title, skip AI
         // BUT: Also check location to avoid wrong-country matches
-        const guestNameLower = guest.full_name.toLowerCase();
-        const guestCountryLower = (guest.country || '').toLowerCase();
-
-        // Location mismatch keywords - if snippet contains these but doesn't match guest country, reject
-        const usLocations = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'california', 'texas', 'florida', 'united states', 'usa', 'u.s.', 'america'];
-        const ukLocations = ['london', 'manchester', 'birmingham', 'leeds', 'glasgow', 'liverpool', 'edinburgh', 'united kingdom', 'uk', 'britain'];
-        const uaeLocations = ['dubai', 'abu dhabi', 'uae', 'united arab emirates', 'sharjah', 'ajman'];
-        const gulfLocations = ['saudi arabia', 'qatar', 'bahrain', 'kuwait', 'oman', 'riyadh', 'doha', 'jeddah'];
-        const egyptLocations = ['egypt', 'cairo', 'alexandria', 'giza', 'egyptian'];
-        const middleEastLocations = [...uaeLocations, ...gulfLocations]; // Combine for backward compatibility
 
         const perfectLinkedIn = platforms.linkedin.find(r => {
             const titleLower = (r.title || '').toLowerCase();
