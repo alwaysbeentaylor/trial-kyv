@@ -6,7 +6,7 @@ services:
   # BACKEND API (Node.js/Express)
   # ==========================================
   - type: web
-    name: kyv-backend
+    name: kyv-trial-api
     runtime: node
     region: frankfurt
     plan: starter
@@ -55,7 +55,7 @@ services:
   # FRONTEND (React/Vite Static Site)
   # ==========================================
   - type: web
-    name: kyv-frontend
+    name: kyv-trial
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
@@ -73,5 +73,5 @@ services:
       - key: VITE_API_URL
         fromService:
           type: web
-          name: kyv-backend
+          name: kyv-trial-api
           envVarKey: RENDER_EXTERNAL_URL
