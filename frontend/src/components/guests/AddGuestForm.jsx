@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { apiFetch } from '../../utils/api';
 import CountryAutocomplete from '../common/CountryAutocomplete';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 function AddGuestForm({ onClose, onSuccess }) {
+    const { t } = useLanguage();
     const [formData, setFormData] = useState({
         full_name: '',
         email: '',
@@ -20,7 +22,7 @@ function AddGuestForm({ onClose, onSuccess }) {
         e.preventDefault();
 
         if (!formData.full_name.trim()) {
-            setError('Naam is verplicht');
+            setError(t('Naam is verplicht'));
             return;
         }
 
@@ -36,7 +38,7 @@ function AddGuestForm({ onClose, onSuccess }) {
             // onSuccess already calls setShowAddForm(false) via handleGuestUpdated
             if (onSuccess) onSuccess(data.id, startResearch);
         } catch (err) {
-            setError(err.message || 'Opslaan mislukt');
+            setError(err.message || t('Opslaan mislukt'));
         } finally {
             setSaving(false);
         }
@@ -48,7 +50,7 @@ function AddGuestForm({ onClose, onSuccess }) {
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--color-border)]">
                     <div className="flex items-center justify-between">
-                        <h2 className="font-heading text-xl font-semibold">Nieuwe Gast Toevoegen</h2>
+                        <h2 className="font-heading text-xl font-semibold">{t('Nieuwe Gast Toevoegen')}</h2>
                         <button
                             onClick={onClose}
                             className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-2xl"
@@ -64,14 +66,14 @@ function AddGuestForm({ onClose, onSuccess }) {
                         {/* Name (required) */}
                         <div>
                             <label className="text-sm font-medium block mb-1">
-                                Naam <span className="text-[var(--color-error)]">*</span>
+                                {t('Naam')} <span className="text-[var(--color-error)]">*</span>
                             </label>
                             <input
                                 type="text"
                                 value={formData.full_name}
                                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                                 className="input"
-                                placeholder="Volledige naam"
+                                placeholder={t('Volledige naam')}
                                 autoFocus
                             />
                         </div>
@@ -79,17 +81,17 @@ function AddGuestForm({ onClose, onSuccess }) {
                         {/* Email & Phone */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium block mb-1">E-mail</label>
+                                <label className="text-sm font-medium block mb-1">{t('E-mail')}</label>
                                 <input
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     className="input"
-                                    placeholder="email@voorbeeld.be"
+                                    placeholder={t('email@voorbeeld.be')}
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-medium block mb-1">Telefoon</label>
+                                <label className="text-sm font-medium block mb-1">{t('Telefoon')}</label>
                                 <input
                                     type="tel"
                                     value={formData.phone}
@@ -102,34 +104,34 @@ function AddGuestForm({ onClose, onSuccess }) {
 
                         {/* Country with Autocomplete */}
                         <div>
-                            <label className="text-sm font-medium block mb-1">Land</label>
+                            <label className="text-sm font-medium block mb-1">{t('Land')}</label>
                             <CountryAutocomplete
                                 value={formData.country}
                                 onChange={(country) => setFormData({ ...formData, country })}
-                                placeholder="Type om te zoeken..."
+                                placeholder={t('Type om te zoeken...')}
                             />
                         </div>
 
                         {/* Company */}
                         <div>
-                            <label className="text-sm font-medium block mb-1">Bedrijf</label>
+                            <label className="text-sm font-medium block mb-1">{t('Bedrijf')}</label>
                             <input
                                 type="text"
                                 value={formData.company}
                                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                                 className="input"
-                                placeholder="Bedrijfsnaam"
+                                placeholder={t('Bedrijfsnaam')}
                             />
                         </div>
 
                         {/* Notes */}
                         <div>
-                            <label className="text-sm font-medium block mb-1">Notities</label>
+                            <label className="text-sm font-medium block mb-1">{t('Notities')}</label>
                             <textarea
                                 value={formData.notes}
                                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                 className="input min-h-[80px]"
-                                placeholder="Extra informatie..."
+                                placeholder={t('Extra informatie...')}
                             />
                         </div>
 
@@ -148,14 +150,14 @@ function AddGuestForm({ onClose, onSuccess }) {
                             onClick={onClose}
                             className="btn btn-secondary"
                         >
-                            Annuleren
+                            {t('Annuleren')}
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
                             className="btn btn-primary"
                         >
-                            {saving ? 'Opslaan...' : 'Gast Toevoegen'}
+                            {saving ? t('Opslaan...') : t('Gast Toevoegen')}
                         </button>
                     </div>
                 </form>
