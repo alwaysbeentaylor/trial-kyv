@@ -2523,50 +2523,73 @@ Return JSON:
         const perfectLinkedIn = platforms.linkedin.find(r => {
             const titleLower = (r.title || '').toLowerCase();
             const snippetLower = (r.snippet || '').toLowerCase();
+            const linkLower = (r.link || '').toLowerCase();
             const nameMatches = titleLower.includes(guestNameLower) && r.link.includes('linkedin.com/in/');
 
             if (!nameMatches) return false;
 
-            // Universal location check: If guest has a country, verify the snippet location matches
+            // Universal location check: If guest has a country, verify the location matches
             if (guestCountryLower) {
-                // Check if snippet contains a location that is clearly different from guest country
+                // FIRST: Check LinkedIn URL prefix (uk.linkedin.com, ca.linkedin.com, etc.)
+                const urlCountryMatch = linkLower.match(/^https?:\/\/([a-z]{2})\.linkedin\.com/);
+                const urlCountryCode = urlCountryMatch ? urlCountryMatch[1] : null;
+
+                // Map country codes to regions
+                const usUrlCodes = ['us', 'www']; // www is usually US
+                const ukUrlCodes = ['uk', 'gb'];
+                const euUrlCodes = ['nl', 'be', 'de', 'fr', 'es', 'it', 'pt', 'at', 'ch'];
+                const meUrlCodes = ['ae', 'sa', 'qa', 'bh', 'kw', 'om'];
+
+                const guestIsUAE = guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai');
+                const guestIsUS = guestCountryLower.includes('united states') || guestCountryLower.includes('usa') || guestCountryLower.includes('america');
+                const guestIsUK = guestCountryLower.includes('kingdom') || guestCountryLower.includes('uk') || guestCountryLower.includes('britain');
+                const guestIsEU = ['netherlands', 'nederland', 'belgium', 'belgië', 'germany', 'deutschland', 'france', 'spain', 'italy'].some(c => guestCountryLower.includes(c));
+
+                // URL prefix-based filtering (most reliable)
+                if (urlCountryCode) {
+                    if (guestIsUAE && (usUrlCodes.includes(urlCountryCode) || ukUrlCodes.includes(urlCountryCode))) {
+                        console.log(`⚠️ LinkedIn SKIPPED (${urlCountryCode}.linkedin.com for UAE guest): ${r.link}`);
+                        return false;
+                    }
+                    if (guestIsUS && (meUrlCodes.includes(urlCountryCode) || ukUrlCodes.includes(urlCountryCode))) {
+                        console.log(`⚠️ LinkedIn SKIPPED (${urlCountryCode}.linkedin.com for US guest): ${r.link}`);
+                        return false;
+                    }
+                    if (guestIsUK && (usUrlCodes.includes(urlCountryCode) || meUrlCodes.includes(urlCountryCode))) {
+                        console.log(`⚠️ LinkedIn SKIPPED (${urlCountryCode}.linkedin.com for UK guest): ${r.link}`);
+                        return false;
+                    }
+                    if (guestIsEU && usUrlCodes.includes(urlCountryCode)) {
+                        console.log(`⚠️ LinkedIn SKIPPED (${urlCountryCode}.linkedin.com for EU guest): ${r.link}`);
+                        return false;
+                    }
+                }
+
+                // SECOND: Check snippet content for location indicators
                 const snippetHasUSLocation = usLocations.some(loc => snippetLower.includes(loc));
                 const snippetHasUKLocation = ukLocations.some(loc => snippetLower.includes(loc));
                 const snippetHasMiddleEastLocation = middleEastLocations.some(loc => snippetLower.includes(loc));
 
-                // If guest is from UAE/Dubai
-                if (guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai')) {
-                    if (snippetHasUSLocation || snippetHasUKLocation) {
-                        console.log(`⚠️ LinkedIn SKIPPED (US/UK location for UAE guest): ${r.link}`);
-                        return false;
-                    }
+                if (guestIsUAE && (snippetHasUSLocation || snippetHasUKLocation)) {
+                    console.log(`⚠️ LinkedIn SKIPPED (US/UK snippet for UAE guest): ${r.link}`);
+                    return false;
                 }
-                // If guest is from US
-                else if (guestCountryLower.includes('united states') || guestCountryLower.includes('usa') || guestCountryLower.includes('america')) {
-                    if (snippetHasMiddleEastLocation || snippetHasUKLocation) {
-                        console.log(`⚠️ LinkedIn SKIPPED (non-US location for US guest): ${r.link}`);
-                        return false;
-                    }
+                if (guestIsUS && (snippetHasMiddleEastLocation || snippetHasUKLocation)) {
+                    console.log(`⚠️ LinkedIn SKIPPED (non-US snippet for US guest): ${r.link}`);
+                    return false;
                 }
-                // If guest is from UK
-                else if (guestCountryLower.includes('kingdom') || guestCountryLower.includes('uk') || guestCountryLower.includes('britain')) {
-                    if (snippetHasUSLocation || snippetHasMiddleEastLocation) {
-                        console.log(`⚠️ LinkedIn SKIPPED (non-UK location for UK guest): ${r.link}`);
-                        return false;
-                    }
+                if (guestIsUK && (snippetHasUSLocation || snippetHasMiddleEastLocation)) {
+                    console.log(`⚠️ LinkedIn SKIPPED (non-UK snippet for UK guest): ${r.link}`);
+                    return false;
                 }
-                // For European countries
-                else if (['netherlands', 'nederland', 'belgium', 'belgië', 'germany', 'deutschland', 'france', 'spain', 'italy', 'portugal', 'austria', 'switzerland'].some(c => guestCountryLower.includes(c))) {
+                if (guestIsEU && snippetHasUSLocation) {
+                    console.log(`⚠️ LinkedIn SKIPPED (US snippet for EU guest): ${r.link}`);
+                    return false;
+                }
+                // Generic check for any other country
+                if (!guestIsUAE && !guestIsUS && !guestIsUK && !guestIsEU) {
                     if (snippetHasUSLocation) {
-                        console.log(`⚠️ LinkedIn SKIPPED (US location for EU guest): ${r.link}`);
-                        return false;
-                    }
-                }
-                // Generic check: if snippet explicitly mentions a different country
-                else {
-                    // Check if snippet mentions US but guest is not from US
-                    if (snippetHasUSLocation && !guestCountryLower.includes('state') && !guestCountryLower.includes('usa') && !guestCountryLower.includes('america')) {
-                        console.log(`⚠️ LinkedIn SKIPPED (US location for non-US guest from ${guest.country}): ${r.link}`);
+                        console.log(`⚠️ LinkedIn SKIPPED (US snippet for ${guest.country} guest): ${r.link}`);
                         return false;
                     }
                 }
@@ -2619,13 +2642,52 @@ Return JSON:
 
                 // Skip LinkedIn results with wrong country location
                 if (link.includes('linkedin.com/in') && guestCountryLower) {
-                    const guestIsEuropean = europeanCountries.some(c => guestCountryLower.includes(c));
-                    if (guestIsEuropean) {
-                        const snippetHasUSLocation = wrongCountryIndicators.some(loc => snippetLower.includes(loc));
-                        if (snippetHasUSLocation) {
-                            console.log(`⚠️ AI candidate SKIPPED (US location): ${link}`);
+                    // Check LinkedIn URL prefix for country (uk.linkedin.com, ca.linkedin.com, etc.)
+                    const urlCountryMatch = link.match(/^https?:\/\/([a-z]{2})\.linkedin\.com/);
+                    const urlCountryCode = urlCountryMatch ? urlCountryMatch[1] : null;
+
+                    // Map country codes to regions
+                    const usCountryCodes = ['us', 'www']; // www is usually US
+                    const ukCountryCodes = ['uk', 'gb'];
+                    const euCountryCodes = ['nl', 'be', 'de', 'fr', 'es', 'it', 'pt', 'at', 'ch'];
+                    const meCountryCodes = ['ae', 'sa', 'qa', 'bh', 'kw', 'om'];
+
+                    const guestIsUAE = guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai');
+                    const guestIsUS = guestCountryLower.includes('united states') || guestCountryLower.includes('usa') || guestCountryLower.includes('america');
+                    const guestIsUK = guestCountryLower.includes('kingdom') || guestCountryLower.includes('uk') || guestCountryLower.includes('britain');
+                    const guestIsEU = ['netherlands', 'nederland', 'belgium', 'belgië', 'germany', 'deutschland', 'france', 'spain', 'italy'].some(c => guestCountryLower.includes(c));
+
+                    // URL-based filtering
+                    if (urlCountryCode) {
+                        if (guestIsUAE && (usCountryCodes.includes(urlCountryCode) || ukCountryCodes.includes(urlCountryCode))) {
+                            console.log(`⚠️ AI candidate SKIPPED (${urlCountryCode}.linkedin.com for UAE guest): ${link}`);
                             return false;
                         }
+                        if (guestIsUS && (meCountryCodes.includes(urlCountryCode) || ukCountryCodes.includes(urlCountryCode))) {
+                            console.log(`⚠️ AI candidate SKIPPED (${urlCountryCode}.linkedin.com for US guest): ${link}`);
+                            return false;
+                        }
+                        if (guestIsUK && (usCountryCodes.includes(urlCountryCode) || meCountryCodes.includes(urlCountryCode))) {
+                            console.log(`⚠️ AI candidate SKIPPED (${urlCountryCode}.linkedin.com for UK guest): ${link}`);
+                            return false;
+                        }
+                        if (guestIsEU && usCountryCodes.includes(urlCountryCode)) {
+                            console.log(`⚠️ AI candidate SKIPPED (${urlCountryCode}.linkedin.com for EU guest): ${link}`);
+                            return false;
+                        }
+                    }
+
+                    // Snippet-based filtering (backup)
+                    const snippetHasUSLocation = usLocations.some(loc => snippetLower.includes(loc));
+                    const snippetHasUKLocation = ukLocations.some(loc => snippetLower.includes(loc));
+
+                    if (guestIsUAE && (snippetHasUSLocation || snippetHasUKLocation)) {
+                        console.log(`⚠️ AI candidate SKIPPED (US/UK snippet for UAE guest): ${link}`);
+                        return false;
+                    }
+                    if (guestIsEU && snippetHasUSLocation) {
+                        console.log(`⚠️ AI candidate SKIPPED (US snippet for EU guest): ${link}`);
+                        return false;
                     }
                 }
 
