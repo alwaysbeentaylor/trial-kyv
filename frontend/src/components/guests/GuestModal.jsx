@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../../utils/api';
 import { useLanguage } from '../../contexts/LanguageContext';
+import CountryAutocomplete from '../common/CountryAutocomplete';
 
 function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
     const { t } = useLanguage();
@@ -351,11 +352,10 @@ function GuestModal({ guest, onClose, onUpdate, onResearch, onDownloadPDF }) {
                             {t('Land')}
                         </span>
                         {isEditing ? (
-                            <input
-                                type="text"
+                            <CountryAutocomplete
                                 value={editData.country}
-                                onChange={(e) => setEditData({ ...editData, country: e.target.value })}
-                                className="input"
+                                onChange={(country) => setEditData({ ...editData, country })}
+                                placeholder="Type om te zoeken..."
                             />
                         ) : (
                             <span className="text-sm">{guest.country || '-'}</span>

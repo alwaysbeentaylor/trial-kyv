@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { apiFetch } from '../../utils/api';
-
-const COUNTRIES = [
-    'België', 'Nederland', 'Frankrijk', 'Duitsland', 'Verenigd Koninkrijk',
-    'Verenigde Staten', 'Zwitserland', 'Luxemburg', 'Italië', 'Spanje',
-    'Oostenrijk', 'Canada', 'Australië', 'Japan', 'China', 'Anders'
-];
+import CountryAutocomplete from '../common/CountryAutocomplete';
 
 function AddGuestForm({ onClose, onSuccess }) {
     const [formData, setFormData] = useState({
@@ -113,19 +108,14 @@ function AddGuestForm({ onClose, onSuccess }) {
                             </div>
                         </div>
 
-                        {/* Country */}
+                        {/* Country with Autocomplete */}
                         <div>
                             <label className="text-sm font-medium block mb-1">Land</label>
-                            <select
+                            <CountryAutocomplete
                                 value={formData.country}
-                                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                                className="input"
-                            >
-                                <option value="">Selecteer land...</option>
-                                {COUNTRIES.map(country => (
-                                    <option key={country} value={country}>{country}</option>
-                                ))}
-                            </select>
+                                onChange={(country) => setFormData({ ...formData, country })}
+                                placeholder="Type om te zoeken..."
+                            />
                         </div>
 
                         {/* Company */}
@@ -183,3 +173,4 @@ function AddGuestForm({ onClose, onSuccess }) {
 }
 
 export default AddGuestForm;
+
