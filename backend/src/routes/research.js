@@ -3,32 +3,9 @@ const router = express.Router();
 const db = require('../db/database');
 const smartSearch = require('../services/smartSearch');
 const vipScorer = require('../services/vipScorer');
+const researchController = require('../services/researchController');
 
-/**
- * Helper to update main guest record with research findings
- */
-function updateGuestFromResearch(guestId, searchResults) {
-    try {
-        console.log(`📝 Updating guest ${guestId} with research results: Job="${searchResults.jobTitle}", Company="${searchResults.companyName}"`);
-
-        // Update company, country, AND job_title in the main guests table
-        db.prepare(`
-            UPDATE guests 
-            SET company = COALESCE(NULLIF(?, ''), company),
-                country = COALESCE(NULLIF(?, ''), country),
-                job_title = COALESCE(NULLIF(?, ''), job_title)
-            WHERE id = ?
-        `).run(
-            searchResults.companyName,
-            searchResults.effectiveCountry || searchResults.socialMediaLocation || searchResults.instagramLocation || searchResults.twitterLocation,
-            searchResults.jobTitle,
-            guestId
-        );
-    } catch (err) {
-        console.error('Failed to update guest from research:', err.message);
-    }
-}
-
+// POST /api/research/:guestId - Start research for a single guest
 // POST /api/research/:guestId - Start research for a single guest
 router.post('/:guestId', async (req, res) => {
     try {
@@ -37,230 +14,37 @@ router.post('/:guestId', async (req, res) => {
 
         // Get language preference from Accept-Language header
         const language = req.headers['accept-language'] || 'nl';
-        console.log(`🌐 Research language preference: ${language}`);
 
-        // Get guest
-        const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(guestId);
-        if (!guest) {
-            return res.status(404).json({ error: 'Gast niet gevonden' });
-        }
-
-        // Check existing research
-        const existingResearch = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(guestId);
-        if (existingResearch && !forceRefresh) {
-            return res.json({
-                message: 'Research al uitgevoerd',
-                research: existingResearch,
-                cached: true
-            });
-        }
-
-        // Perform smart search (Wikipedia + AI) with 60s timeout
-        let searchResults;
-        try {
-            const researchPromise = smartSearch.searchGuest(guest, { language });
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Research timeout (180s)')), 180000)
-            );
-
-            searchResults = await Promise.race([researchPromise, timeoutPromise]);
-        } catch (error) {
-            console.error('❌ Research failed:', error.message);
-            console.error('Stack:', error.stack);
-
-            // Check for common issues
-            if (error.message.includes('timeout')) {
-                return res.status(504).json({
-                    error: 'Research timeout - dit kan gebeuren als de zoekopdrachten te lang duren. Probeer het opnieuw.',
-                    details: 'De research heeft meer dan 180 seconden geduurd. Dit kan komen door trage API responses of captcha problemen.'
-                });
-            }
-
-            if (error.message.includes('2Captcha') || error.message.includes('captcha')) {
-                return res.status(500).json({
-                    error: 'Google Search faalt - 2Captcha API key probleem',
-                    details: 'Controleer of TWO_CAPTCHA_API_KEY correct is ingesteld in Render environment variables.'
-                });
-            }
-
-            return res.status(500).json({
-                error: 'Research mislukt',
-                details: error.message
-            });
-        }
-
-        // DEBUG: Log what we're getting from search
-        console.log('📊 Search Results Summary:');
-        console.log(`   LinkedIn URL: ${searchResults.linkedinUrl || 'Not found'}`);
-        console.log(`   LinkedIn Candidates: ${searchResults.linkedinCandidates?.length || 0}`);
-        console.log(`   Needs Review: ${searchResults.needsLinkedInReview}`);
-        console.log(`   Instagram: ${searchResults.instagramHandle || 'Not found'}`);
-        console.log(`   Twitter: ${searchResults.twitterHandle || 'Not found'}`);
-        console.log(`   Website: ${searchResults.websiteUrl || 'Not found'}`);
-        console.log(`   VIP Score: ${searchResults.vipScore}`);
-
-        // Check if we found anything at all
-        if (!searchResults.linkedinUrl &&
-            (!searchResults.linkedinCandidates || searchResults.linkedinCandidates.length === 0) &&
-            !searchResults.instagramHandle &&
-            !searchResults.twitterHandle &&
-            !searchResults.websiteUrl) {
-            console.warn('⚠️ WARNING: No results found for guest. This could indicate:');
-            console.warn('   1. TWO_CAPTCHA_API_KEY not set or invalid');
-            console.warn('   2. Google Search service failing');
-            console.warn('   3. Guest name/company not searchable online');
-        }
-
-        // Get VIP score from AI analysis or calculate
-        const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-        const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
-
-        // Save or update research results
-        if (existingResearch) {
-            db.prepare(`
-        UPDATE research_results SET
-          profile_photo_url = ?,
-          job_title = ?,
-          company_name = ?,
-          company_size = ?,
-          is_owner = ?,
-          company_ownership_label = ?,
-          employment_type = ?,
-          industry = ?,
-          linkedin_url = ?,
-          linkedin_connections = ?,
-          linkedin_candidates = ?,
-          needs_linkedin_review = ?,
-          instagram_handle = ?,
-          instagram_url = ?,
-          instagram_bio = ?,
-          instagram_location = ?,
-          instagram_followers = ?,
-          twitter_handle = ?,
-          twitter_url = ?,
-          twitter_bio = ?,
-          twitter_location = ?,
-          twitter_member_since = ?,
-          twitter_followers = ?,
-          social_media_location = ?,
-          facebook_url = ?,
-          youtube_url = ?,
-          website_url = ?,
-          notable_info = ?,
-          full_report = ?,
-          press_mentions = ?,
-          net_worth = ?,
-          followers_estimate = ?,
-          vip_score = ?,
-          influence_level = ?,
-          raw_search_results = ?,
-          no_results_found = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE guest_id = ?
-       `).run(
-                searchResults.profilePhotoUrl,
-                searchResults.jobTitle,
-                searchResults.companyName,
-                searchResults.companySize,
-                searchResults.isOwner === true ? 1 : (searchResults.isOwner === false ? 0 : null),
-                searchResults.companyOwnershipLabel || null,
-                searchResults.employmentType,
-                searchResults.industry,
-                searchResults.linkedinUrl,
-                searchResults.linkedinConnections,
-                JSON.stringify(searchResults.linkedinCandidates || []),
-                searchResults.needsLinkedInReview ? 1 : 0,
-                searchResults.instagramHandle,
-                searchResults.instagramUrl,
-                searchResults.instagramBio,
-                searchResults.instagramLocation,
-                searchResults.instagramFollowers,
-                searchResults.twitterHandle,
-                searchResults.twitterUrl,
-                searchResults.twitterBio,
-                searchResults.twitterLocation,
-                searchResults.twitterMemberSince,
-                searchResults.twitterFollowers,
-                searchResults.socialMediaLocation,
-                searchResults.facebookUrl,
-                searchResults.youtubeUrl,
-                searchResults.websiteUrl,
-                searchResults.notableInfo,
-                JSON.stringify(searchResults.fullReport || null),
-                searchResults.pressMentions,
-                searchResults.netWorthEstimate,
-                searchResults.followersEstimate,
-                vipScore,
-                influenceLevel,
-                JSON.stringify(searchResults.rawResults),
-                searchResults.noResultsFound ? 1 : 0,
-                guestId
-            );
-        } else {
-            db.prepare(`
-        INSERT INTO research_results (
-          guest_id, profile_photo_url, job_title, company_name, company_size, is_owner, company_ownership_label, employment_type,
-          industry, linkedin_url, linkedin_connections, linkedin_candidates, needs_linkedin_review,
-          instagram_handle, instagram_url, instagram_bio, instagram_location, instagram_followers,
-          twitter_handle, twitter_url, twitter_bio, twitter_location, twitter_member_since, twitter_followers,
-          social_media_location, facebook_url, youtube_url, website_url,
-          notable_info, full_report, press_mentions, net_worth, followers_estimate, vip_score, influence_level, raw_search_results, no_results_found
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-                guestId,
-                searchResults.profilePhotoUrl,
-                searchResults.jobTitle,
-                searchResults.companyName,
-                searchResults.companySize,
-                searchResults.isOwner === true ? 1 : (searchResults.isOwner === false ? 0 : null),
-                searchResults.companyOwnershipLabel || null,
-                searchResults.employmentType,
-                searchResults.industry,
-                searchResults.linkedinUrl,
-                searchResults.linkedinConnections,
-                JSON.stringify(searchResults.linkedinCandidates || []),
-                searchResults.needsLinkedInReview ? 1 : 0,
-                searchResults.instagramHandle,
-                searchResults.instagramUrl,
-                searchResults.instagramBio,
-                searchResults.instagramLocation,
-                searchResults.instagramFollowers,
-                searchResults.twitterHandle,
-                searchResults.twitterUrl,
-                searchResults.twitterBio,
-                searchResults.twitterLocation,
-                searchResults.twitterMemberSince,
-                searchResults.twitterFollowers,
-                searchResults.socialMediaLocation,
-                searchResults.facebookUrl,
-                searchResults.youtubeUrl,
-                searchResults.websiteUrl,
-                searchResults.notableInfo,
-                JSON.stringify(searchResults.fullReport || null),
-                searchResults.pressMentions,
-                searchResults.netWorthEstimate,
-                searchResults.followersEstimate,
-                vipScore,
-                influenceLevel,
-                searchResults.rawResults ? JSON.stringify(searchResults.rawResults) : null,
-                searchResults.noResultsFound ? 1 : 0
-            );
-        }
-
-        // UPDATE THE MAIN GUEST RECORD with research findings
-        updateGuestFromResearch(guestId, searchResults);
-
-        // Get updated research
-        const research = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(guestId);
+        const result = await researchController.performResearch(guestId, { forceRefresh, language });
 
         res.json({
             success: true,
-            research,
-            cached: false
+            ...result
         });
 
     } catch (error) {
         console.error('Research error:', error);
+
+        // Check for common issues
+        if (error.message.includes('timeout')) {
+            return res.status(504).json({
+                error: 'Research timeout - dit kan gebeuren als de zoekopdrachten te lang duren. Probeer het opnieuw.',
+                details: 'De research heeft meer dan 180 seconden geduurd. Dit kan komen door trage API responses of captcha problemen.'
+            });
+        }
+
+        if (error.message.includes('2Captcha') || error.message.includes('captcha')) {
+            return res.status(500).json({
+                error: 'Google Search faalt - 2Captcha API key probleem',
+                details: 'Controleer of TWO_CAPTCHA_API_KEY correct is ingesteld in Render environment variables.'
+            });
+        }
+
+        // Handle specific "Guest not found" error from controller
+        if (error.message === 'Gast niet gevonden') {
+            return res.status(404).json({ error: 'Gast niet gevonden' });
+        }
+
         res.status(500).json({ error: error.message });
     }
 });
@@ -309,6 +93,9 @@ router.post('/:guestId/ai-analyze', async (req, res) => {
             return res.status(404).json({ error: 'Geen bestaande research gevonden om te verrijken' });
         }
 
+        // Get language preference
+        const language = req.headers['accept-language'] || 'nl';
+
         // 1. Save backup of current report
         db.prepare(`
             UPDATE research_results SET
@@ -319,7 +106,7 @@ router.post('/:guestId/ai-analyze', async (req, res) => {
         `).run(customInput, guestId);
 
         // 2. Perform AI analysis with custom input
-        const analysis = await smartSearch.analyzeWithCustomInput(guest, research, customInput);
+        const analysis = await smartSearch.analyzeWithCustomInput(guest, research, customInput, language);
 
         if (!analysis) {
             return res.status(500).json({ error: 'AI analyse is mislukt' });

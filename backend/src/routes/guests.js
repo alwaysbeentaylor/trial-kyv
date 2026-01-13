@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const researchController = require('../services/researchController');
 
 // GET /api/guests - List all guests with filters
 router.get('/', (req, res) => {
@@ -224,6 +225,19 @@ router.post('/', (req, res) => {
     `).run(full_name.trim(), email || null, phone || null, country || null, company || null, notes || null);
 
         const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(result.lastInsertRowid);
+
+        // Automatically start research in background
+        // We do NOT await this promise because we want to return the guest immediately to the UI
+        try {
+            const language = req.headers['accept-language'] || 'nl';
+            console.log(`🚀 Triggering auto-research for new guest: ${guest.full_name} (${language})`);
+            researchController.performResearch(guest.id, { language })
+                .then(() => console.log(`✅ Auto-research completed for guest ${guest.id}: ${guest.full_name}`))
+                .catch(err => console.error(`❌ Auto-research failed for guest ${guest.id}:`, err.message));
+        } catch (researchError) {
+            console.error('Failed to trigger auto-research:', researchError);
+            // Don't fail the request, just log it
+        }
 
         res.status(201).json(guest);
 

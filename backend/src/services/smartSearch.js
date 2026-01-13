@@ -1588,7 +1588,7 @@ NOTE: We are looking for successful business professionals, entrepreneurs, and d
      * Use OpenAI to analyze LinkedIn, News, and Company info to calculate VIP score
      * Generates a comprehensive guest report with confidence levels
      */
-    async analyzeWithAI(guest, linkedinInfo, celebrityInfo = null, newsInfo = null, fallbackInfo = null, allResults = [], emailDomainInfo = null) {
+    async analyzeWithAI(guest, linkedinInfo, celebrityInfo = null, newsInfo = null, fallbackInfo = null, allResults = [], emailDomainInfo = null, language = 'nl') {
         const openai = this.getOpenAI();
         if (!openai) {
             console.log('OpenAI not configured, using basic scoring');
@@ -1670,7 +1670,102 @@ WEBSITE ANALYSE:
 - Diensten: ${guest.company_info.deep_info.products_services?.join(', ')}
 - Doelgroep: ${guest.company_info.deep_info.target_market}` : ''}` : '';
 
-            const prompt = `Je bent een VIP-gastanalist voor een 5-sterren luxe hotel. Analyseer de data over "${guest.full_name}" en schrijf een professioneel rapport.
+            let prompt;
+            if (language === 'en') {
+                prompt = `You are a VIP guest analyst for a 5-star luxury hotel. Analyze the data about "${guest.full_name}" and write a professional report.
+
+--- STRICT RULES ---
+1. NO SPECULATION: State only what is directly supported by the data.
+2. NO FLUFF: Write factually and professionally. No standard opening sentences or pleasantries.
+3. NATURAL TEXT: Avoid the word "null" or "unknown" in the report text. If information is missing, leave it out so it reads naturally. No empty spaces or gaps in lists.
+4. FORMATTING: Use compact notation for numbers (e.g., 18k instead of 18,000).
+5. PERSONALIZED RECOMMENDATIONS: Make service recommendations truly specific to this person. No generic "be polite" advice, but actions based on their interests, role, or recent achievements.
+6. CONFIDENCE SCORING: Provide a confidence score ("high", "medium", "low") for each important field.
+7. CRITICAL VIEW & ANTI-HISTORY: Be extremely critical of sources. Is this really the living person currently staying at our hotel?
+   - HISTORICAL FIGURES: If you see data about people born in the 19th or early 20th century (e.g., 1882), or people long deceased: IGNORE COMPLETELY. DO NOT report a history lesson.
+   - NAMESAKES: If the name is common and there is no match with country/company, assume it is a namesake and report nothing.
+   - RESULT IF NO INFO: If there is no current, relevant information about the guest as a living person, set all fields to "null" or "No information found" and set noResultsFound to true. NEVER report on someone else just because the name is the same.
+8. FOCUS ON VIP STATUS: We are looking for work experience, wealth, titles, and influence of the CURRENT person.
+9. STUDENT STATUS - CRITICAL VERIFICATION: If you see "Student" or "Student at [School]" as a position:
+   - VERIFICATION: Check if this is a current student or an outdated profile
+   - CONTEXT CHECK: If there is also work experience, company name, or other professional indicators, "Student" is likely WRONG or OUTDATED
+   - PREFERENCE: If there is both "Student" and a company name/work experience, use the COMPANY NAME and WORK EXPERIENCE as the primary source
+   - ALERT: If someone has a company (email domain info) but LinkedIn says "Student", the LinkedIn data is likely outdated - use the company info
+   - DO NOT REPORT: Report "Student" only if there are NO other professional indicators and it is clearly a current student
+10. EMAIL DOMAIN INFO IS PRIORITY: If there is EMAIL DOMAIN ANALYSIS data, ALWAYS use this as the primary source for:
+   - Company Name (company_analysis.company_name)
+   - Website URL (use emailDomainInfo.websiteUrl)
+   - Company Description (company_analysis.company_description)
+   - Industry (industry field)
+   - Company Size (company_size field)
+   - This is verified information directly from the email domain and takes PRECEDENCE over all other sources.
+
+--- DATA INPUT ---
+NAME: ${guest.full_name}
+EMAIL: ${guest.email || 'Unknown'}
+COUNTRY: ${guest.country || 'Unknown'}
+NOTES: ${guest.notes || 'None'}
+
+${emailDomainContext}
+${linkedinContext}
+${fallbackContext}
+${searchResultsContext}
+${celebrityContext}
+${newsContext}
+${companyContext}
+
+--- OUTPUT FORMAT (JSON) ---
+{
+  "vip_score": { "value": 1-10, "confidence": "high/medium/low", "reason": "..." },
+  "industry": { "value": "...", "confidence": "..." },
+  "company_size": { "value": "Micro/Small/Medium/Large", "confidence": "..." },
+  "is_owner": { "value": true/false/null, "confidence": "..." },
+  "employment_type": { "value": "...", "confidence": "..." },
+  "influence_level": { "value": "Low/Medium/High/VIP", "confidence": "..." },
+  "net_worth_estimate": { "value": "...", "confidence": "..." },
+  "notable_info": "Max 150 chars summary",
+  "full_report": {
+    "executive_summary": "Powerful summary of 2-3 sentences.",
+    "professional_background": {
+      "current_role": "Current role and responsibilities",
+      "career_trajectory": "Short description of career path",
+      "industry_expertise": "Areas of expertise",
+      "notable_achievements": "Important achievements"
+    },
+    "company_analysis": {
+      "company_name": "Company Name (USE EMAIL DOMAIN INFO IF AVAILABLE - verified info)",
+      "company_description": "What the company does (USE EMAIL DOMAIN INFO if available)",
+      "company_position": "Market position",
+      "employee_count": "Number of employees if known"
+    },
+    "vip_indicators": {
+      "wealth_signals": "Indications of wealth",
+      "influence_factors": "Factors indicating influence",
+      "status_markers": "Status markers like titles"
+    },
+    "service_recommendations": {
+      "priority_level": "Standard/Elevated/VIP/Ultra-VIP",
+      "quick_win": "Most impactful direct action (max 100 chars). E.g., 'Congratulate on recent IPO of [Company]'.",
+      "categories": [
+        {
+          "title": "Personal Attention",
+          "items": ["Concrete tip 1", "Concrete tip 2"]
+        },
+        {
+          "title": "Conversation Topics & News",
+          "items": ["Refer to [News Fact]", "Ask about [Interest]"]
+        },
+        {
+          "title": "Hospitality & Gestures",
+          "items": ["Suggestion for drink/gift", "Specific room adjustment"]
+        }
+      ]
+    },
+    "additional_notes": "Any extra relevant information"
+  }
+}`;
+            } else {
+                prompt = `Je bent een VIP-gastanalist voor een 5-sterren luxe hotel. Analyseer de data over "${guest.full_name}" en schrijf een professioneel rapport.
 
 --- STRIKTE REGELS ---
 1. GEEN SPECULATIE: Vermeld alleen wat direct uit de data blijkt.
@@ -1762,11 +1857,12 @@ ${companyContext}
     "additional_notes": "Eventuele extra relevante informatie"
   }
 } `;
+            }
 
             const response = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: 'Je bent een meedogenloos feitelijke VIP-analist. Je haat fluff en speculatie. Je rapporteert alleen wat bewezen is.' },
+                    { role: 'system', content: language === 'en' ? 'You are a ruthlessly factual VIP analyst. You hate fluff and speculation. You report only what is proven.' : 'Je bent een meedogenloos feitelijke VIP-analist. Je haat fluff en speculatie. Je rapporteert alleen wat bewezen is.' },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.1,
@@ -1806,7 +1902,7 @@ ${companyContext}
      * Specialized analysis that incorporates manual research findings provided by the user.
      * Combines existing research results with new findings to create a superior report.
      */
-    async analyzeWithCustomInput(guest, existingResearch, customInput) {
+    async analyzeWithCustomInput(guest, existingResearch, customInput, language = 'nl') {
         const openai = this.getOpenAI();
         if (!openai) {
             console.log('OpenAI not configured for custom analysis');
@@ -1828,7 +1924,78 @@ BESTAANDE RESEARCH DATA:
 - Full Report (bestaand): ${existingResearch.full_report ? 'Beschikbaar' : 'Niet beschikbaar'}
 `;
 
-            const prompt = `Je bent een VIP-gastanalist voor een 5-sterren luxe hotel. Een collega heeft HANDMATIG aanvullende informatie gevonden over een gast. Jouw taak is om deze nieuwe informatie te combineren met de bestaande research data om een premium rapport te genereren.
+            let prompt;
+            if (language === 'en') {
+                prompt = `You are a VIP guest analyst for a 5-star luxury hotel. A colleague has MANUALLY found additional information about a guest. Your task is to combine this new information with the existing research data to generate a premium report.
+
+GUEST INFO:
+Name: ${guest.full_name}
+Country: ${guest.country || 'Unknown'}
+${guest.notes ? `Hotel notes: ${guest.notes}` : ''}
+
+${existingContext}
+
+NEW MANUALLY FOUND INFORMATION (PRIORITY):
+${customInput}
+
+INSTRUCTIONS:
+1. The NEW MANUAL INFORMATION is leading and often more current or specific.
+2. Write factually and professionally. NO SPECULATION or fluff.
+3. NO NULL: Never use the word "null" in descriptive texts. If information is missing, leave it out so it reads naturally.
+4. NUMBERS: Format numbers compactly (e.g., 10k, 5m).
+5. PERSONALIZED RECOMMENDATIONS: Make these very specific and extensive based on all info.
+6. Write in professional English.
+7. The report must be very detailed for hotel management.
+
+Generate a DETAILED JSON response:
+{
+  "vip_score": [updated 1-10 score],
+  "industry": "[sector]",
+  "company_size": "[Micro/Small/Medium/Large]",
+  "is_owner": [true/false/null],
+  "employment_type": "[Owner/CEO/Director/Manager/etc]",
+  "notable_info": "[short updated summary, max 150 chars]",
+  "influence_level": "[Low/Medium/High/VIP]",
+  "net_worth_estimate": "[updated estimated wealth if applicable]",
+  "full_report": {
+    "executive_summary": "[new summary]",
+    "professional_background": {
+      "current_role": "[details]",
+      "career_trajectory": "[details]",
+      "industry_expertise": "[details]",
+      "notable_achievements": "[details]"
+    },
+    "company_analysis": {
+      "company_name": "[company name]",
+      "company_description": "[details]",
+      "company_position": "[details]",
+      "estimated_revenue": "[details]",
+      "employee_count": "[details]"
+    },
+    "vip_indicators": {
+      "wealth_signals": "[details]",
+      "influence_factors": "[details]",
+      "status_markers": "[details]"
+    },
+    "service_recommendations": {
+      "priority_level": "[Standard/Elevated/VIP/Ultra-VIP]",
+      "quick_win": "[Most impactful direct action]",
+      "categories": [
+        {
+          "title": "Combined Insights",
+          "items": ["[item]", "[item]"]
+        },
+        {
+          "title": "New Opportunities",
+          "items": ["[item]", "[item]"]
+        }
+      ]
+    },
+    "additional_notes": "[combined extra relevant information]"
+  }
+}`;
+            } else {
+                prompt = `Je bent een VIP-gastanalist voor een 5-sterren luxe hotel. Een collega heeft HANDMATIG aanvullende informatie gevonden over een gast. Jouw taak is om deze nieuwe informatie te combineren met de bestaande research data om een premium rapport te genereren.
 
 GASTINFORMATIE:
 Naam: ${guest.full_name}
@@ -1896,11 +2063,12 @@ Genereer een GEDETAILLEERD JSON-antwoord:
     "additional_notes": "[gecombineerde extra relevante informatie]"
   }
 }`;
+            }
 
             const response = await openai.chat.completions.create({
                 model: 'gpt-4o', // Use GPT-4o for more critical custom analysis
                 messages: [
-                    { role: 'system', content: 'Je bent een expert VIP-gastanalist. Je integreert handmatige data met automatische research tot een premium gastrapport.' },
+                    { role: 'system', content: language === 'en' ? 'You are an expert VIP guest analyst. You integrate manual data with automatic research into a premium guest report.' : 'Je bent een expert VIP-gastanalist. Je integreert handmatige data met automatische research tot een premium gastrapport.' },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.3,
@@ -2764,7 +2932,7 @@ Return JSON:
 
         // 1. Final AI Analysis (Primary) - We always run this
         const analysisPromiseIdx = parallelPromises.length;
-        parallelPromises.push(this.analyzeWithAI(guest, linkedinInfo, celebrityInfo, newsInfo, fallbackMatch, allResults, emailDomainInfo));
+        parallelPromises.push(this.analyzeWithAI(guest, linkedinInfo, celebrityInfo, newsInfo, fallbackMatch, allResults, emailDomainInfo, language));
 
         // 2. Company Research (Optional)
         let companyLookupIdx = -1;
