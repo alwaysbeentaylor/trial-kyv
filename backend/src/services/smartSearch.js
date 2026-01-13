@@ -2362,8 +2362,14 @@ Return JSON:
             discoveryPromises.push(perplexitySearch.searchPerson(guest).then(res => ({ source: 'perplexity', data: res })));
         }
 
-        // 2. Initial Google Probe (Exact Name)
-        discoveryPromises.push(googleSearch.search(`"${guest.full_name}"`, 10).then(res => ({ source: 'google', data: res })));
+        // 2. Initial Google Probe (Exact Name + Company/Country for better precision)
+        let probeQuery = `"${guest.full_name}"`;
+        if (effectiveCompany) {
+            probeQuery += ` ${effectiveCompany}`; // Relaxed: no quotes around company to catch variations
+        } else if (guest.country) {
+            probeQuery += ` ${guest.country}`;
+        }
+        discoveryPromises.push(googleSearch.search(probeQuery, 10).then(res => ({ source: 'google', data: res })));
 
         const discoveryResults = await Promise.allSettled(discoveryPromises);
 
@@ -2416,96 +2422,91 @@ Return JSON:
         }
 
         // ============================================
-        // STEP 2: GOOGLE BACKUP - Always run if no LinkedIn found
-        // This catches people Perplexity might miss
+        // STEP 2: SMART GOOGLE BACKUP
+        // Always run if no valid LinkedIn found in discovery
         // ============================================
-        if (!linkedInFound && !celebrityInfo.isCelebrity) {
-            console.log('🔍 Step 2: Running Google SERP backup (Perplexity might have missed results)...');
 
-            // Query 1: Exact name like Google does
-            const exactNameQuery = `"${guest.full_name}"`;
-            const googleResults = await googleSearch.search(exactNameQuery, 10);
+        // Check if the LinkedIn found in discovery actually matches our needs
+        let validLinkedInFound = false;
+        if (linkedInFound) {
+            const profiles = this.extractPlatformProfiles(allResults);
+            const perfectMatch = profiles.linkedin.find(r => {
+                const link = r.link.toLowerCase();
+                const snippetLower = (r.snippet || '').toLowerCase();
 
-            if (googleResults && googleResults.length > 0) {
-                let newResultsCount = 0;
-                for (const result of googleResults) {
-                    if (result.link && !seenUrls.has(result.link)) {
-                        seenUrls.add(result.link);
-                        allResults.push(result);
-                        newResultsCount++;
-                        if (result.link.includes('linkedin.com/in/')) {
-                            linkedInFound = true;
-                            console.log(`   ✅ LinkedIn found via Google: ${result.link}`);
-                        }
-                    }
+                // URL Prefix Check
+                const urlCountryMatch = link.match(/^https?:\/\/([a-z]{2})\.linkedin\.com/);
+                const urlCountryCode = urlCountryMatch ? urlCountryMatch[1] : null;
+
+                const guestIsUAE = guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai');
+                if (guestIsUAE && (urlCountryCode === 'uk' || urlCountryCode === 'gb' || urlCountryCode === 'us')) return false;
+
+                // Snippet Check
+                const usLocations = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'california', 'texas', 'florida', 'united states', 'usa', 'u.s.', 'america'];
+                const egyptLocations = ['egypt', 'cairo', 'alexandria', 'giza', 'egyptian'];
+                if (guestIsUAE && usLocations.some(loc => snippetLower.includes(loc))) return false;
+                if (guestIsUAE && egyptLocations.some(loc => snippetLower.includes(loc))) return false;
+
+                return true;
+            });
+            if (perfectMatch) validLinkedInFound = true;
+        }
+
+        if (!validLinkedInFound && !celebrityInfo.isCelebrity) {
+            console.log('🔍 Step 2: Running Smart Query Backup...');
+
+            // Get smart queries from generator (already handles company from email)
+            const smartQueries = await queryGenerator.generateQueries(guest);
+            // Prioritize queries with Marriott/Company
+            const prioritizedQueries = smartQueries
+                .filter(q => effectiveCompany && q.toLowerCase().includes(effectiveCompany.toLowerCase().split(' ')[0]))
+                .concat(smartQueries.filter(q => !effectiveCompany || !q.toLowerCase().includes(effectiveCompany.toLowerCase().split(' ')[0])))
+                .slice(0, 8); // Deep dive with 8 smart queries
+
+            console.log(`   🚀 Running ${prioritizedQueries.length} smart search queries...`);
+
+            // Run prioritized queries in small batches
+            const batchSize = 3;
+            for (let i = 0; i < prioritizedQueries.length; i += batchSize) {
+                if (validLinkedInFound) {
+                    linkedInFound = true;
+                    break;
                 }
-                if (newResultsCount > 0) {
-                    console.log(`   📊 Google added ${newResultsCount} new results`);
-                }
-            }
 
-            // Query 2: LinkedIn specific if still not found
-            if (!linkedInFound) {
-                const linkedInQuery = `site:linkedin.com/in "${guest.full_name}"`;
-                const linkedInResults = await googleSearch.search(linkedInQuery, 5);
+                const currentBatch = prioritizedQueries.slice(i, i + batchSize);
+                const batchPromises = currentBatch.map(query => googleSearch.search(query, 5));
+                const batchResults = await Promise.all(batchPromises);
 
-                if (linkedInResults && linkedInResults.length > 0) {
-                    for (const result of linkedInResults) {
-                        if (result.link && !seenUrls.has(result.link)) {
-                            seenUrls.add(result.link);
-                            allResults.push(result);
-                            if (result.link.includes('linkedin.com/in/')) {
-                                linkedInFound = true;
-                                console.log(`   ✅ LinkedIn profile found: ${result.link}`);
+                for (const results of batchResults) {
+                    if (results && results.length > 0) {
+                        for (const result of results) {
+                            if (result.link && !seenUrls.has(result.link)) {
+                                seenUrls.add(result.link);
+                                allResults.push(result);
+                                if (result.link.includes('linkedin.com/in/')) {
+                                    // Quick check if this one is valid
+                                    const link = result.link.toLowerCase();
+                                    const snippetLower = (result.snippet || '').toLowerCase();
+                                    const urlCountryMatch = link.match(/^https?:\/\/([a-z]{2})\.linkedin\.com/);
+                                    const urlCountryCode = urlCountryMatch ? urlCountryMatch[1] : null;
+
+                                    const guestIsUAE = guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai');
+                                    if (guestIsUAE && (urlCountryCode === 'uk' || urlCountryCode === 'gb' || urlCountryCode === 'us')) continue;
+
+                                    validLinkedInFound = true;
+                                    linkedInFound = true;
+                                }
                             }
                         }
                     }
                 }
+
+                if (!validLinkedInFound) await new Promise(r => setTimeout(r, 1000));
             }
         }
 
-        // Check if we found anything at all
         if (allResults.length === 0) {
             console.log('⚠️ Discovery and backup searches failed to find any results.');
-        }
-
-        // Fallback: if nothing found, try 1-2 generic queries
-        if (allResults.length === 0) {
-            console.log('⚠️ No results found, trying fallback queries...');
-            const fallbackQueries = [];
-
-            // Add country-specific fallback queries
-            if (guest.country) {
-                const countryTerms = this.getCountrySearchTerms(guest.country);
-                countryTerms.forEach(term => {
-                    fallbackQueries.push(`"${guest.full_name}" ${term}`.trim());
-                });
-            } else {
-                fallbackQueries.push(`"${guest.full_name}" ${guest.country || ''}`.trim());
-            }
-
-            if (effectiveCompany) {
-                fallbackQueries.push(`"${guest.full_name}" ${effectiveCompany}`);
-            }
-
-            const finalFallbackQueries = fallbackQueries.filter(Boolean).slice(0, 2);
-
-            for (const query of finalFallbackQueries) {
-                try {
-                    console.log(`   🔎 Fallback: ${query.substring(0, 60)}...`);
-                    const results = await googleSearch.search(query, 3);
-                    for (const result of (results || [])) {
-                        if (result.link && !seenUrls.has(result.link)) {
-                            seenUrls.add(result.link);
-                            allResults.push(result);
-                        }
-                    }
-                    if (allResults.length > 0) break; // Stop if we found something
-                    await delay(1500);
-                } catch (error) {
-                    console.error(`   ⚠️ Fallback query failed`);
-                }
-            }
         }
 
         console.log(`✅ Collected ${allResults.length} unique results`);
