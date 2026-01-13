@@ -27,6 +27,7 @@
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.34.0",
     "puppeteer-core": "^24.34.0",
+    "resend": "^6.7.0",
     "xlsx": "^0.18.5"
   }
 }

@@ -4,6 +4,18 @@ const db = require('../db/database');
 const smartSearch = require('../services/smartSearch');
 const vipScorer = require('../services/vipScorer');
 const researchController = require('../services/researchController');
+const emailService = require('../services/emailService');
+
+// Helper to normalize influence_level to Dutch values for database constraint
+function normalizeInfluenceLevel(level) {
+    if (!level) return 'Gemiddeld';
+    const normalized = level.toLowerCase().trim();
+    const mapping = {
+        'low': 'Laag', 'medium': 'Gemiddeld', 'high': 'Hoog', 'vip': 'VIP',
+        'laag': 'Laag', 'gemiddeld': 'Gemiddeld', 'hoog': 'Hoog', 'none': 'Laag'
+    };
+    return mapping[normalized] || 'Gemiddeld';
+}
 
 // POST /api/research/:guestId - Start research for a single guest
 // POST /api/research/:guestId - Start research for a single guest
@@ -225,7 +237,7 @@ router.post('/batch', async (req, res) => {
                 // Perform smart search
                 const searchResults = await smartSearch.searchGuest(guest);
                 const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-                const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
+                const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
 
                 // Save results
                 if (existingResearch) {
@@ -296,6 +308,20 @@ router.post('/batch', async (req, res) => {
                 results.errors.push({ guestId, error: guestError.message });
             }
         }
+
+        // Send email notification for batch completion
+        const completedGuests = guestIds.map(id => {
+            const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
+            const research = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(id);
+            return guest && research ? { ...guest, ...research } : null;
+        }).filter(Boolean);
+
+        emailService.notifyBatchComplete(`batch-${Date.now()}`, {
+            completed: results.completed,
+            total: results.total,
+            errors: results.errors,
+            guests: completedGuests
+        }).catch(err => console.error('Batch email notification failed:', err.message));
 
         res.json(results);
 
@@ -583,7 +609,7 @@ async function processEnrichmentQueue(queueId, guestIds, startIndex = 0) {
 
             const searchResults = result;
             const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-            const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
+            const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
 
             // Save results
             db.prepare(`
@@ -636,7 +662,7 @@ async function processEnrichmentQueue(queueId, guestIds, startIndex = 0) {
                 db.prepare(`
                     INSERT OR IGNORE INTO research_results (
                         guest_id, notable_info, vip_score, influence_level
-                    ) VALUES (?, ?, 0, 'None')
+                    ) VALUES (?, ?, 0, 'Laag')
                 `).run(guestId, `Geen gegevens gevonden (${err.message})`);
             } catch (dbErr) {
                 console.error(`Failed to save failure marker for guest ${guestId}:`, dbErr.message);
@@ -657,6 +683,20 @@ async function processEnrichmentQueue(queueId, guestIds, startIndex = 0) {
         queue.completedAt = new Date().toISOString();
         saveQueueToDb(queueId, queue);
         console.log(`🎉 Enrichment queue ${queueId} completed: ${queue.completed}/${queue.total}`);
+
+        // Send email notification for batch completion
+        const completedGuests = guestIds.map(id => {
+            const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
+            const research = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(id);
+            return guest && research ? { ...guest, ...research } : null;
+        }).filter(Boolean);
+
+        emailService.notifyBatchComplete(queueId, {
+            completed: queue.completed,
+            total: queue.total,
+            errors: queue.errors,
+            guests: completedGuests
+        }).catch(err => console.error('Batch email notification failed:', err.message));
     }
 }
 
@@ -723,7 +763,7 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
 
             const searchResults = result;
             const vipScore = searchResults.vipScore || vipScorer.calculate(searchResults);
-            const influenceLevel = searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore);
+            const influenceLevel = normalizeInfluenceLevel(searchResults.influenceLevel || vipScorer.getInfluenceLevel(vipScore));
 
             // Save results
             db.prepare(`
@@ -765,7 +805,7 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
                 db.prepare(`
                     INSERT OR IGNORE INTO research_results (
                         guest_id, notable_info, vip_score, influence_level
-                    ) VALUES (?, ?, 0, 'None')
+                    ) VALUES (?, ?, 0, 'Laag')
                 `).run(guestId, `Geen gegevens gevonden (${err.message})`);
             } catch (dbErr) {
                 // Ignore DB errors
@@ -814,6 +854,20 @@ async function processEnrichmentQueueParallel(queueId, guestIds, concurrency = 3
         queue.completedAt = new Date().toISOString();
         saveQueueToDb(queueId, queue);
         console.log(`🎉 Parallel enrichment completed: ${queue.completed}/${queue.total}`);
+
+        // Send email notification for batch completion
+        const completedGuests = guestIds.map(id => {
+            const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
+            const research = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(id);
+            return guest && research ? { ...guest, ...research } : null;
+        }).filter(Boolean);
+
+        emailService.notifyBatchComplete(queueId, {
+            completed: queue.completed,
+            total: queue.total,
+            errors: queue.errors,
+            guests: completedGuests
+        }).catch(err => console.error('Batch email notification failed:', err.message));
     }
 }
 

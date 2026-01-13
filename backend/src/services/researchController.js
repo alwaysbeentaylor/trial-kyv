@@ -1,6 +1,10 @@
 const db = require('../db/database');
 const smartSearch = require('./smartSearch');
 const vipScorer = require('./vipScorer');
+const emailService = require('./emailService');
+
+// Initialize email service on load
+emailService.initialize();
 
 /**
  * Normalize influence_level to Dutch values for database constraint
@@ -230,6 +234,11 @@ async function performResearch(guestId, options = {}) {
 
     // Get updated research
     const research = db.prepare('SELECT * FROM research_results WHERE guest_id = ?').get(guestId);
+
+    // Send email notification (async, don't wait)
+    emailService.notifySingleResearch(guest, research).catch(err =>
+        console.error('Email notification failed:', err.message)
+    );
 
     return {
         research,
