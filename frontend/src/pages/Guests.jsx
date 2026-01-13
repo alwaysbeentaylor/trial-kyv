@@ -439,21 +439,21 @@ function Guests({ onUpdate }) {
                                 <div className="flex-1">
                                     <h4 className={`font-semibold flex items-center gap-2 ${enrichmentProgress.status === 'stopped' ? 'text-red-800' : 'text-purple-800'}`}>
                                         {enrichmentProgress.status === 'completed'
-                                            ? 'Onderzoek Voltooid!'
+                                            ? t('Onderzoek Voltooid!')
                                             : enrichmentProgress.status === 'paused'
-                                                ? 'Onderzoek Gepauzeerd'
+                                                ? t('Onderzoek Gepauzeerd')
                                                 : enrichmentProgress.status === 'stopped'
-                                                    ? 'Onderzoek Gestopt'
-                                                    : <span className="flex items-center gap-1"><span className="animate-spin text-xs">⟳</span>Bezig</span>}
-                                        {enrichmentProgress.status === 'paused' && <span className="text-[10px] px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full animate-pulse">GEPAUZEERD</span>}
-                                        {enrichmentProgress.status === 'stopped' && <span className="text-[10px] px-2 py-0.5 bg-red-200 text-red-700 rounded-full">GESTOP T</span>}
+                                                    ? t('Onderzoek Gestopt')
+                                                    : <span className="flex items-center gap-1"><span className="animate-spin text-xs">⟳</span>{t('Bezig')}</span>}
+                                        {enrichmentProgress.status === 'paused' && <span className="text-[10px] px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full animate-pulse">{t('GEPAUZEERD')}</span>}
+                                        {enrichmentProgress.status === 'stopped' && <span className="text-[10px] px-2 py-0.5 bg-red-200 text-red-700 rounded-full">{t('STOPPED')}</span>}
                                     </h4>
                                     <p className={`text-sm ${enrichmentProgress.status === 'stopped' ? 'text-red-600' : 'text-purple-600'}`}>
                                         {enrichmentProgress.status === 'stopped'
-                                            ? `Proces beëindigd op ${enrichmentProgress.completed} gasten`
+                                            ? `${t('Proces beëindigd op')} ${enrichmentProgress.completed} ${t('gasten')}`
                                             : enrichmentProgress.currentName
-                                                ? `Onderzoeken: ${enrichmentProgress.currentName}`
-                                                : `${enrichmentProgress.completed} van ${enrichmentProgress.total} gasten verrijkt`}
+                                                ? `${t('Onderzoeken:')} ${enrichmentProgress.currentName}`
+                                                : `${enrichmentProgress.completed} ${t('van')} ${enrichmentProgress.total} ${t('gasten verrijkt')}`}
                                     </p>
                                 </div>
                             </div>
@@ -463,21 +463,21 @@ function Guests({ onUpdate }) {
                                         <button
                                             onClick={handlePauseQueue}
                                             className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
-                                            title="Pauzeren"
+                                            title={t('Pauzeren')}
                                         >
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
                                         </button>
                                         <button
                                             onClick={handleSkipGuest}
                                             className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
-                                            title="Huidige gast overslaan"
+                                            title={t('Huidige gast overslaan')}
                                         >
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></svg>
                                         </button>
                                         <button
                                             onClick={handleStopQueue}
                                             className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Stoppen"
+                                            title={t('Stoppen')}
                                         >
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
                                         </button>
@@ -488,7 +488,7 @@ function Guests({ onUpdate }) {
                                         <button
                                             onClick={handleResumeQueue}
                                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                            title="Hervatten"
+                                            title={t('Hervatten')}
                                         >
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                                         </button>
@@ -496,7 +496,7 @@ function Guests({ onUpdate }) {
                                             <button
                                                 onClick={handleStopQueue}
                                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Stoppen"
+                                                title={t('Stoppen')}
                                             >
                                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
                                             </button>
@@ -812,7 +812,7 @@ function Guests({ onUpdate }) {
                                                                 <div className="flex items-center gap-2 px-3 py-1 bg-purple-50 rounded-lg border border-purple-100">
                                                                     <span className="animate-spin text-purple-600">⟳</span>
                                                                     <span className="text-[10px] font-medium text-purple-600 uppercase tracking-tight">
-                                                                        Bezig
+                                                                        {t('Bezig')}
                                                                     </span>
                                                                 </div>
                                                             );
@@ -822,7 +822,7 @@ function Guests({ onUpdate }) {
                                                             return (
                                                                 <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg border border-gray-100">
                                                                     <span className="text-[10px] font-medium text-gray-500 uppercase tracking-tight">
-                                                                        Bezig
+                                                                        {t('Bezig')}
                                                                     </span>
                                                                 </div>
                                                             );

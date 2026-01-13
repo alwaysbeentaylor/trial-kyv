@@ -488,7 +488,7 @@ ${resultsInfo}
 
 INSTRUCTIONS:
 1. **PRIMARY GOAL**: Find the most likely identity for this guest.
-2. **PRIORITY**: LinkedIn is the preferred professional source, BUT if the guest is a **Public Figure** (Presenter, Artist, Musician, etc.), their Wikipedia or verified social media may be more relevant than an outdated LinkedIn profile.
+2. **PRIORITY**: LinkedIn and RocketReach are the preferred professional sources. If the guest is a **Public Figure** (Presenter, Artist, Musician, etc.), their Wikipedia or verified social media may be more relevant.
 3. **IDENTIFY PUBLIC FIGURES**: 
    - Look for results like **Wikipedia**, **News Articles**, **IMDb**, or **Verified Social Media** handles.
    - If you see strong evidence that "Name" is a well-known person (e.g. a famous presenter/singer in the Netherlands), and one LinkedIn result shows a "Student" or "Unknown Person" with the same name, **REJECT the student** as a namesake mismatch.
@@ -1661,6 +1661,12 @@ KNOWLEDGE GRAPH DATA (CELEBRITY):
 RECENT NIEUWS (Laatste 6 maanden):
 ${newsInfo.articles.map(a => `- ${a.title} (${a.source}): ${a.snippet}`).join('\n')}` : 'Geen recent nieuws gevonden.';
 
+            // Build RocketReach context (very high quality professional data in snippets)
+            const rocketreachResults = allResults.filter(r => r.link?.includes('rocketreach.co/'));
+            const rocketreachContext = rocketreachResults.length > 0 ? `
+ROCKETREACH GEGEVENS (Professionele Snippets):
+${rocketreachResults.map((r, i) => `${i + 1}. ${r.title}: ${r.snippet}`).join('\n')}` : '';
+
             // Build results context from all search snippets (VERY IMPORTANT FOR CONTEXT!)
             const searchResultsContext = allResults && allResults.length > 0 ? `
 ALGEMENE ZOEKRESULTATEN (Snippets):
@@ -1729,6 +1735,7 @@ NOTES: ${guest.notes || 'None'}
 
 ${emailDomainContext}
 ${linkedinContext}
+${rocketreachContext}
 ${fallbackContext}
 ${searchResultsContext}
 ${celebrityContext}
@@ -1822,6 +1829,7 @@ NOTITIES: ${guest.notes || 'Geen'}
 
 ${emailDomainContext}
 ${linkedinContext}
+${rocketreachContext}
 ${fallbackContext}
 ${searchResultsContext}
 ${celebrityContext}
@@ -2744,6 +2752,7 @@ Return JSON:
                     link.includes('instagram.com/') ||
                     link.includes('x.com/') ||
                     link.includes('twitter.com/') ||
+                    link.includes('rocketreach.co/') ||
                     matchesName;
             }).slice(0, 15);
 
@@ -2873,7 +2882,7 @@ Return JSON:
 
         const isSocialMedia = (url) => {
             const socialDomains = ['linkedin.com', 'facebook.com', 'twitter.com', 'x.com',
-                'instagram.com', 'tiktok.com', 'youtube.com', 'github.com'];
+                'instagram.com', 'tiktok.com', 'youtube.com', 'github.com', 'rocketreach.co'];
             return socialDomains.some(domain => url?.toLowerCase().includes(domain));
         };
 
@@ -2882,6 +2891,9 @@ Return JSON:
                 r.link?.includes('linkedin.com/in/') &&
                 !r.link?.includes('/posts/') &&
                 !r.link?.includes('/pulse/')
+            ),
+            rocketreach: results.filter(r =>
+                r.link?.includes('rocketreach.co/')
             ),
             facebook: results.filter(r =>
                 r.link?.includes('facebook.com/') &&

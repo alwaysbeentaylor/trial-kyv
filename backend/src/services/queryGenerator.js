@@ -208,8 +208,12 @@ Return JSON array of strings:
         // ============================================
         // TIER 5: PROFESSIONAL PLATFORMS
         // ============================================
+        queries.push(`site:linkedin.com/in "${name}"`);
+        queries.push(`site:rocketreach.co "${name}"`);
+        if (company) {
+            queries.push(`site:rocketreach.co "${name}" "${company}"`);
+        }
         queries.push(`site:github.com "${name}"`);
-        queries.push(`site:github.com "${nameNoSpaces}"`);
         queries.push(`site:medium.com "@${nameNoSpaces}"`);
         queries.push(`site:behance.net "${name}"`);
         queries.push(`site:dribbble.com "${name}"`);
