@@ -2516,8 +2516,9 @@ Return JSON:
         const guestCountryLower = (guest.country || '').toLowerCase();
 
         // Location mismatch keywords - if snippet contains these but doesn't match guest country, reject
-        const wrongCountryIndicators = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'united states', 'usa', 'u.s.', 'america'];
-        const europeanCountries = ['netherlands', 'nederland', 'belgium', 'belgië', 'belgique', 'germany', 'deutschland', 'france', 'uk', 'united kingdom', 'spain', 'italy', 'portugal', 'austria', 'switzerland'];
+        const usLocations = ['chicago', 'new york', 'los angeles', 'san francisco', 'boston', 'miami', 'seattle', 'denver', 'austin', 'dallas', 'houston', 'atlanta', 'phoenix', 'philadelphia', 'california', 'texas', 'florida', 'united states', 'usa', 'u.s.', 'america'];
+        const ukLocations = ['london', 'manchester', 'birmingham', 'leeds', 'glasgow', 'liverpool', 'edinburgh', 'united kingdom', 'uk', 'britain'];
+        const middleEastLocations = ['dubai', 'abu dhabi', 'uae', 'united arab emirates', 'saudi arabia', 'qatar', 'bahrain', 'kuwait', 'oman'];
 
         const perfectLinkedIn = platforms.linkedin.find(r => {
             const titleLower = (r.title || '').toLowerCase();
@@ -2526,13 +2527,48 @@ Return JSON:
 
             if (!nameMatches) return false;
 
-            // If guest has a European country, check for US location mismatch
-            const guestIsEuropean = europeanCountries.some(c => guestCountryLower.includes(c));
-            if (guestIsEuropean) {
-                const snippetHasUSLocation = wrongCountryIndicators.some(loc => snippetLower.includes(loc));
-                if (snippetHasUSLocation) {
-                    console.log(`⚠️ LinkedIn SKIPPED (US location in EU guest search): ${r.link} → "${snippetLower.substring(0, 100)}..."`);
-                    return false;
+            // Universal location check: If guest has a country, verify the snippet location matches
+            if (guestCountryLower) {
+                // Check if snippet contains a location that is clearly different from guest country
+                const snippetHasUSLocation = usLocations.some(loc => snippetLower.includes(loc));
+                const snippetHasUKLocation = ukLocations.some(loc => snippetLower.includes(loc));
+                const snippetHasMiddleEastLocation = middleEastLocations.some(loc => snippetLower.includes(loc));
+
+                // If guest is from UAE/Dubai
+                if (guestCountryLower.includes('emirates') || guestCountryLower.includes('uae') || guestCountryLower.includes('dubai')) {
+                    if (snippetHasUSLocation || snippetHasUKLocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (US/UK location for UAE guest): ${r.link}`);
+                        return false;
+                    }
+                }
+                // If guest is from US
+                else if (guestCountryLower.includes('united states') || guestCountryLower.includes('usa') || guestCountryLower.includes('america')) {
+                    if (snippetHasMiddleEastLocation || snippetHasUKLocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (non-US location for US guest): ${r.link}`);
+                        return false;
+                    }
+                }
+                // If guest is from UK
+                else if (guestCountryLower.includes('kingdom') || guestCountryLower.includes('uk') || guestCountryLower.includes('britain')) {
+                    if (snippetHasUSLocation || snippetHasMiddleEastLocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (non-UK location for UK guest): ${r.link}`);
+                        return false;
+                    }
+                }
+                // For European countries
+                else if (['netherlands', 'nederland', 'belgium', 'belgië', 'germany', 'deutschland', 'france', 'spain', 'italy', 'portugal', 'austria', 'switzerland'].some(c => guestCountryLower.includes(c))) {
+                    if (snippetHasUSLocation) {
+                        console.log(`⚠️ LinkedIn SKIPPED (US location for EU guest): ${r.link}`);
+                        return false;
+                    }
+                }
+                // Generic check: if snippet explicitly mentions a different country
+                else {
+                    // Check if snippet mentions US but guest is not from US
+                    if (snippetHasUSLocation && !guestCountryLower.includes('state') && !guestCountryLower.includes('usa') && !guestCountryLower.includes('america')) {
+                        console.log(`⚠️ LinkedIn SKIPPED (US location for non-US guest from ${guest.country}): ${r.link}`);
+                        return false;
+                    }
                 }
             }
 
@@ -2544,6 +2580,24 @@ Return JSON:
         if (perfectLinkedIn) {
             // FAST PATH: Skip AI, use title parsing directly
             console.log(`⚡ Fast match: LinkedIn title contains "${guest.full_name}" - skipping AI`);
+
+            // Extract location from snippet for verification
+            const snippetLower = (perfectLinkedIn.snippet || '').toLowerCase();
+            let extractedLocation = null;
+
+            // Try to extract location from snippet (usually format: "Name. Title. Company. Location.")
+            const locationPatterns = [
+                /\.\s*([^.]+?),\s*([^.]+?)\.\s*\d+\s*follow/i,  // "City, Country. X followers"
+                /\.\s*([^.]+?),\s*([^.]+?)\.\s*\d+\s*connect/i, // "City, Country. X connections"
+            ];
+            for (const pattern of locationPatterns) {
+                const match = perfectLinkedIn.snippet.match(pattern);
+                if (match) {
+                    extractedLocation = `${match[1]}, ${match[2]}`.trim();
+                    break;
+                }
+            }
+
             const parsed = this.parseLinkedInTitle(perfectLinkedIn.title, guest.full_name);
             aiResult = {
                 url: perfectLinkedIn.link,
@@ -2552,7 +2606,7 @@ Return JSON:
                 confidence: 0.95,
                 extractedJobTitle: parsed?.jobTitle,
                 extractedCompany: parsed?.company,
-                location: null
+                location: extractedLocation
             };
         } else {
             // Prepare candidates for AI matching (LinkedIn + Broad/Social/Wikipedia)
